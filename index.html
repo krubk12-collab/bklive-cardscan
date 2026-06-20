@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>การ์ดตอบคำถาม ArUco (POC)</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --navy:#1b2540; --blue:#2d6cdf; --green:#1aa363; --red:#e23b4e; --amber:#f5a623; --paper:#f6f7fb; --ink:#1c2230; }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:'Sarabun',sans-serif; background:var(--paper); color:var(--ink); }
+  header{ background:var(--navy); color:#fff; padding:10px 14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; position:sticky; top:0; z-index:30; }
+  header h1{ font-family:'Kanit',sans-serif; font-size:18px; margin:0; }
+  .tabs{ display:flex; gap:6px; margin-left:auto; }
+  .tabs button{ background:rgba(255,255,255,.12); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-family:'Sarabun'; font-weight:600; cursor:pointer; font-size:14px; }
+  .tabs button.active{ background:var(--amber); color:var(--navy); }
+  .view{ display:none; padding:14px; max-width:1100px; margin:0 auto; }
+  .view.active{ display:block; }
+  .card-panel{ background:#fff; border-radius:12px; padding:14px; box-shadow:0 2px 10px rgba(0,0,0,.07); margin-bottom:14px; }
+  h2{ font-family:'Kanit'; font-size:16px; margin:0 0 10px; color:var(--navy); }
+  button.act{ background:var(--blue); color:#fff; border:none; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-family:'Sarabun'; font-size:15px; }
+  button.act.green{ background:var(--green); } button.act.red{ background:var(--red); } button.act.gray{ background:#6b7280; }
+  label{ font-weight:600; font-size:14px; }
+  input, select, textarea{ font-family:'Sarabun'; font-size:14px; padding:7px 9px; border:1.5px solid #cdd3e0; border-radius:7px; }
+
+  /* ---------- SCANNER ---------- */
+  #camWrap{ position:relative; width:100%; background:#000; border-radius:12px; overflow:hidden; }
+  #video{ width:100%; display:block; }
+  #overlay{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+  .scan-controls{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .qbadge{ font-family:'Kanit'; font-size:20px; color:var(--navy); font-weight:700; }
+  .live-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:7px; margin-top:10px; }
+  .stu{ border:2px solid #d4d9e6; border-radius:9px; padding:6px 4px; text-align:center; background:#fff; transition:.15s; }
+  .stu .n{ font-size:11px; color:#7a8194; font-weight:600; }
+  .stu .nm{ font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stu .ans{ font-family:'Kanit'; font-size:22px; font-weight:700; line-height:1.1; color:#c2c8d6; }
+  .stu.answered{ border-color:var(--green); background:#eafaf2; }
+  .stu.answered .ans{ color:var(--green); }
+  .stat{ font-size:13px; color:#555; }
+  .pill{ display:inline-block; background:#eef2fb; border-radius:20px; padding:3px 10px; font-size:13px; font-weight:600; margin:2px; }
+
+  /* ---------- GENERATOR ---------- */
+  .gen-cards{ display:grid; grid-template-columns:repeat(2,1fr); gap:10mm; }
+  .pcard{ border:1.5px dashed #bbb; border-radius:8px; padding:8mm 6mm; text-align:center; position:relative; aspect-ratio:1/1.15; display:flex; flex-direction:column; }
+  .pcard .corner{ position:absolute; font-family:'Kanit'; font-weight:700; font-size:20px; color:#333; }
+  .pcard .c-tl{ top:4mm; left:5mm; } .pcard .c-tr{ top:4mm; right:5mm; }
+  .pcard .c-bl{ bottom:4mm; left:5mm; transform:rotate(180deg);} .pcard .c-br{ bottom:4mm; right:5mm; transform:rotate(180deg);}
+  .pcard .marker-area{ flex:1; display:flex; align-items:center; justify-content:center; position:relative; }
+  .pcard .marker-area svg{ width:62%; height:auto; }
+  .pcard .side{ position:absolute; font-family:'Kanit'; font-weight:800; font-size:26px; color:#111; }
+  .pcard .s-top{ top:7mm; left:50%; transform:translateX(-50%);}
+  .pcard .s-bottom{ bottom:7mm; left:50%; transform:translateX(-50%) rotate(180deg);}
+  .pcard .s-left{ left:4mm; top:50%; transform:translateY(-50%) rotate(-90deg);}
+  .pcard .s-right{ right:4mm; top:50%; transform:translateY(-50%) rotate(90deg);}
+  .pcard .stu-name{ position:absolute; bottom:1.5mm; left:50%; transform:translateX(-50%); font-size:11px; color:#666; }
+  @media print{
+    header,.tabs,.no-print,#scanView{ display:none !important; }
+    .view{ padding:0; max-width:none; } #genView{ display:block !important; }
+    .gen-cards{ gap:6mm; } .pcard{ border:1px solid #ddd; page-break-inside:avoid; }
+    .gen-config{ display:none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🃏 การ์ดตอบคำถาม ArUco</h1>
+  <span style="font-size:12px;opacity:.8;">POC · เหมือน Plickers แต่เปิดสูตรเอง</span>
+  <div class="tabs">
+    <button id="tabScan" class="active" onclick="showView('scan')">📷 สแกนตอบ</button>
+    <button id="tabGen" onclick="showView('gen')">🖨️ สร้างการ์ด</button>
+  </div>
+</header>
+
+<!-- ============ SCANNER ============ -->
+<div id="scanView" class="view active">
+  <div class="card-panel">
+    <div class="scan-controls">
+      <button class="act green" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
+      <button class="act gray" id="btnStop" onclick="stopCam()" style="display:none;">⏸️ ปิดกล้อง</button>
+      <span class="qbadge">ข้อที่ <span id="qnum">1</span></span>
+      <button class="act" onclick="changeQ(-1)">◀ ข้อก่อน</button>
+      <button class="act" onclick="changeQ(1)">ข้อถัดไป ▶</button>
+      <button class="act red" onclick="clearQ()">ล้างข้อนี้</button>
+      <span class="stat" id="scanStat">ยังไม่เปิดกล้อง</span>
+    </div>
+    <div id="camWrap">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+  </div>
+
+  <div class="card-panel">
+    <h2>ผลตอบสด · ข้อที่ <span id="qnum2">1</span> <span class="stat" id="answerCount"></span></h2>
+    <div class="live-grid" id="liveGrid"></div>
+  </div>
+</div>
+
+<!-- ============ GENERATOR ============ -->
+<div id="genView" class="view">
+  <div class="card-panel gen-config no-print">
+    <h2>ตั้งค่าการ์ด</h2>
+    <p style="font-size:13px;color:#555;margin:4px 0 10px;">ใส่รายชื่อทีละบรรทัด (เลขที่จะไล่ ๑,๒,๓...) หรือเว้นว่างเพื่อสร้างเลขล้วน · การ์ดใบที่ N ใช้มาร์กเกอร์ ID = N</p>
+    <textarea id="roster" rows="5" style="width:100%;" placeholder="เช่น&#10;เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..."></textarea>
+    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <label>จำนวนการ์ด (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
+      <button class="act" onclick="buildCards()">สร้างการ์ด</button>
+      <button class="act green" onclick="window.print()">🖨️ พิมพ์ / PDF</button>
+    </div>
+  </div>
+  <div class="gen-cards" id="genCards"></div>
+</div>
+
+<canvas id="work" style="display:none;"></canvas>
+
+<script src="lib/cv.js"></script>
+<script src="lib/aruco.js"></script>
+<script>
+const DICT = 'ARUCO_MIP_36h12';     // ดิกชันนารีแข็งแรง กันอ่านผิด (tau=12)
+const DET_WIDTH = 720;              // ความกว้างเฟรมที่ใช้ตรวจ (ปรับได้: มาก=ชัดไกลขึ้นแต่ช้าลง)
+const LETTERS = ['A','B','C','D'];  // A=บน B=ขวา C=ล่าง D=ซ้าย (canonical)
+
+// maxHammingDistance:4 — กัน id ผี (false positive) แต่ยังเผื่อ noise กล้องจริงได้ (พิสูจน์ด้วย test_hamming.js)
+let detector = new AR.Detector({ dictionaryName: DICT, maxHammingDistance: 4 });
+let dict = new AR.Dictionary(DICT);
+
+function showView(v){
+  document.getElementById('scanView').classList.toggle('active', v==='scan');
+  document.getElementById('genView').classList.toggle('active', v==='gen');
+  document.getElementById('tabScan').classList.toggle('active', v==='scan');
+  document.getElementById('tabGen').classList.toggle('active', v==='gen');
+}
+
+/* ================= ROSTER (ใช้ร่วมกัน) ================= */
+function getRoster(){
+  let lines = document.getElementById('roster').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if (lines.length === 0){
+    let n = parseInt(document.getElementById('genCount').value) || 25;
+    return Array.from({length:n}, (_,i)=>({ id:i+1, name:'' }));
+  }
+  return lines.map((name,i)=>({ id:i+1, name }));
+}
+function thaiNum(n){ return String(n).replace(/[0-9]/g, d=>'๐๑๒๓๔๕๖๗๘๙'[d]); }
+
+/* ================= GENERATOR ================= */
+function buildCards(){
+  const roster = getRoster();
+  const wrap = document.getElementById('genCards');
+  wrap.innerHTML = '';
+  roster.forEach(stu=>{
+    const svg = dict.generateSVG(stu.id);
+    const num = thaiNum(stu.id);
+    const card = document.createElement('div');
+    card.className = 'pcard';
+    card.innerHTML =
+      '<div class="corner c-tl">'+num+'</div><div class="corner c-tr">'+num+'</div>'+
+      '<div class="corner c-bl">'+num+'</div><div class="corner c-br">'+num+'</div>'+
+      '<div class="side s-top">A</div><div class="side s-right">B</div>'+
+      '<div class="side s-bottom">C</div><div class="side s-left">D</div>'+
+      '<div class="marker-area">'+svg+'</div>'+
+      '<div class="stu-name">'+(stu.name? (num+' · '+stu.name) : ('เลขที่ '+num))+'</div>';
+    wrap.appendChild(card);
+  });
+}
+
+/* ================= SCANNER ================= */
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const octx = overlay.getContext('2d');
+const work = document.getElementById('work');
+const wctx = work.getContext('2d', { willReadFrequently:true });
+let stream = null, running = false;
+let curQ = 1;
+let answers = {};          // answers[q][studentId] = 'A'/'B'/'C'/'D'
+let roster = [];
+
+function ensureQ(q){ if(!answers[q]) answers[q] = {}; return answers[q]; }
+
+async function startCam(){
+  roster = getRoster();
+  renderLiveGrid();
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:960} }, audio:false });
+  }catch(e){
+    document.getElementById('scanStat').textContent = '❌ เปิดกล้องไม่ได้: ' + e.message + ' (ต้องเปิดผ่าน https หรือ localhost)';
+    return;
+  }
+  video.srcObject = stream;
+  await video.play();
+  document.getElementById('btnStart').style.display='none';
+  document.getElementById('btnStop').style.display='inline-block';
+  running = true;
+  loop();
+}
+function stopCam(){
+  running = false;
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  document.getElementById('btnStart').style.display='inline-block';
+  document.getElementById('btnStop').style.display='none';
+  document.getElementById('scanStat').textContent = 'ปิดกล้องแล้ว';
+}
+
+let lastDetect = 0;
+function loop(){
+  if(!running) return;
+  requestAnimationFrame(loop);
+  const now = performance.now();
+  if(now - lastDetect < 90) return;   // ~11 fps พอสำหรับตรวจ ประหยัดแบต
+  lastDetect = now;
+  if(video.videoWidth === 0) return;
+
+  const dw = DET_WIDTH, dh = Math.round(DET_WIDTH * video.videoHeight / video.videoWidth);
+  if(work.width !== dw){ work.width=dw; work.height=dh; overlay.width=dw; overlay.height=dh; }
+  wctx.drawImage(video, 0,0, dw,dh);
+  const img = wctx.getImageData(0,0,dw,dh);
+
+  let markers = [];
+  try{ markers = detector.detect(img); }catch(e){}
+
+  octx.clearRect(0,0,dw,dh);
+  const q = ensureQ(curQ);
+  let seen = 0;
+  markers.forEach(m=>{
+    const ans = answerFromCorners(m.corners);
+    if(!ans) return;
+    // บันทึกเฉพาะนักเรียนที่อยู่ใน roster
+    const stu = roster.find(s=>s.id===m.id);
+    if(stu){ q[m.id] = ans; seen++; }
+    drawMarker(m.corners, m.id, ans, !!stu);
+  });
+  document.getElementById('scanStat').textContent = 'กำลังตรวจ... เห็นในเฟรม '+markers.length+' ใบ';
+  renderLiveGrid();
+}
+
+// คำตอบ = ตัวอักษรของ "ด้าน" ที่ชูขึ้นบนสุดบนจอ (เรขาคณิตล้วน ไม่ต้องเดาทิศ)
+// corners เรียง canonical: [TL,TR,BR,BL] → A=บน(TL-TR) B=ขวา(TR-BR) C=ล่าง(BR-BL) D=ซ้าย(BL-TL)
+function answerFromCorners(c){
+  if(!c || c.length!==4) return null;
+  const mids = [
+    { L:'A', y:(c[0].y+c[1].y)/2 },
+    { L:'B', y:(c[1].y+c[2].y)/2 },
+    { L:'C', y:(c[2].y+c[3].y)/2 },
+    { L:'D', y:(c[3].y+c[0].y)/2 },
+  ];
+  mids.sort((a,b)=>a.y-b.y);   // y น้อย = สูงบนจอ
+  return mids[0].L;
+}
+
+function drawMarker(c, id, ans, known){
+  octx.beginPath();
+  octx.moveTo(c[0].x,c[0].y);
+  for(let i=1;i<4;i++) octx.lineTo(c[i].x,c[i].y);
+  octx.closePath();
+  octx.lineWidth=3; octx.strokeStyle = known? '#1aa363':'#e23b4e'; octx.stroke();
+  const cx=(c[0].x+c[1].x+c[2].x+c[3].x)/4, cy=(c[0].y+c[1].y+c[2].y+c[3].y)/4;
+  octx.fillStyle = known? '#1aa363':'#e23b4e';
+  octx.font='bold 26px Kanit, sans-serif'; octx.textAlign='center'; octx.textBaseline='middle';
+  octx.fillText(ans, cx, cy);
+  octx.fillStyle='#fff'; octx.font='bold 12px Sarabun';
+  octx.fillText('#'+id, cx, cy+20);
+}
+
+function renderLiveGrid(){
+  const grid = document.getElementById('liveGrid');
+  const q = ensureQ(curQ);
+  if(grid.childElementCount !== roster.length){
+    grid.innerHTML='';
+    roster.forEach(s=>{
+      const d=document.createElement('div'); d.className='stu'; d.id='stu_'+s.id;
+      d.innerHTML='<div class="n">เลขที่ '+thaiNum(s.id)+'</div><div class="nm">'+(s.name||'&nbsp;')+'</div><div class="ans">–</div>';
+      grid.appendChild(d);
+    });
+  }
+  let answered=0;
+  roster.forEach(s=>{
+    const d=document.getElementById('stu_'+s.id); if(!d) return;
+    const a=q[s.id];
+    d.classList.toggle('answered', !!a);
+    d.querySelector('.ans').textContent = a || '–';
+    if(a) answered++;
+  });
+  document.getElementById('answerCount').textContent = '· ตอบแล้ว '+answered+'/'+roster.length+' คน';
+}
+
+function changeQ(d){
+  curQ = Math.max(1, curQ + d);
+  document.getElementById('qnum').textContent = thaiNum(curQ);
+  document.getElementById('qnum2').textContent = thaiNum(curQ);
+  renderLiveGrid();
+}
+function clearQ(){
+  if(confirm('ล้างคำตอบข้อ '+curQ+' ?')){ answers[curQ]={}; renderLiveGrid(); }
+}
+
+// เริ่มต้น
+roster = getRoster();
+buildCards();
+renderLiveGrid();
+</script>
+</body>
+</html>
