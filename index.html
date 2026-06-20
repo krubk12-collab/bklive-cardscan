@@ -3,111 +3,202 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>การ์ดตอบคำถาม ArUco (POC)</title>
+<title>ระบบทดสอบด้วยการ์ด ก่อนเรียน-หลังเรียน</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
 <style>
-  :root{ --navy:#1b2540; --blue:#2d6cdf; --green:#1aa363; --red:#e23b4e; --amber:#f5a623; --paper:#f6f7fb; --ink:#1c2230; }
+  :root{ --navy:#1b2540; --blue:#2d6cdf; --green:#1aa363; --red:#e23b4e; --amber:#f5a623; --purple:#7c4dff; --paper:#f6f7fb; --ink:#1c2230; }
   *{box-sizing:border-box;}
   body{ margin:0; font-family:'Sarabun',sans-serif; background:var(--paper); color:var(--ink); }
-  header{ background:var(--navy); color:#fff; padding:10px 14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; position:sticky; top:0; z-index:30; }
-  header h1{ font-family:'Kanit',sans-serif; font-size:18px; margin:0; }
-  .tabs{ display:flex; gap:6px; margin-left:auto; }
-  .tabs button{ background:rgba(255,255,255,.12); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-family:'Sarabun'; font-weight:600; cursor:pointer; font-size:14px; }
+  header{ background:var(--navy); color:#fff; padding:10px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; position:sticky; top:0; z-index:30; }
+  header h1{ font-family:'Kanit',sans-serif; font-size:17px; margin:0; }
+  .tabs{ display:flex; gap:5px; margin-left:auto; flex-wrap:wrap; }
+  .tabs button{ background:rgba(255,255,255,.12); color:#fff; border:none; padding:8px 12px; border-radius:8px; font-family:'Sarabun'; font-weight:600; cursor:pointer; font-size:13.5px; }
   .tabs button.active{ background:var(--amber); color:var(--navy); }
   .view{ display:none; padding:14px; max-width:1100px; margin:0 auto; }
   .view.active{ display:block; }
-  .card-panel{ background:#fff; border-radius:12px; padding:14px; box-shadow:0 2px 10px rgba(0,0,0,.07); margin-bottom:14px; }
+  .panel{ background:#fff; border-radius:12px; padding:14px; box-shadow:0 2px 10px rgba(0,0,0,.07); margin-bottom:14px; }
   h2{ font-family:'Kanit'; font-size:16px; margin:0 0 10px; color:var(--navy); }
-  button.act{ background:var(--blue); color:#fff; border:none; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; font-family:'Sarabun'; font-size:15px; }
-  button.act.green{ background:var(--green); } button.act.red{ background:var(--red); } button.act.gray{ background:#6b7280; }
+  button.act{ background:var(--blue); color:#fff; border:none; padding:9px 15px; border-radius:8px; font-weight:700; cursor:pointer; font-family:'Sarabun'; font-size:14.5px; }
+  button.act.green{ background:var(--green);} button.act.red{ background:var(--red);} button.act.gray{ background:#6b7280;} button.act.purple{background:var(--purple);} button.act.amber{background:var(--amber);color:var(--navy);}
+  button.sm{ padding:5px 10px; font-size:13px; }
   label{ font-weight:600; font-size:14px; }
   input, select, textarea{ font-family:'Sarabun'; font-size:14px; padding:7px 9px; border:1.5px solid #cdd3e0; border-radius:7px; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .muted{ color:#71788a; font-size:13px; }
+  .tag{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12.5px; font-weight:700; }
+  .tag.pre{ background:#e7f0ff; color:#2d6cdf;} .tag.post{ background:#eafaf2; color:#1aa363;}
 
-  /* ---------- SCANNER ---------- */
+  /* questions */
+  .q-item{ border:1.5px solid #e1e5ee; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+  .q-item .qhead{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .q-item .qno{ background:var(--navy); color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-family:'Kanit'; flex-shrink:0; }
+  .q-item textarea{ width:100%; }
+  .choice-row{ display:flex; gap:6px; align-items:center; margin-top:4px; }
+  .choice-row .lab{ font-family:'Kanit'; font-weight:700; width:22px; text-align:center; }
+  .choice-row input[type=text]{ flex:1; }
+  .choice-row.correct input[type=text]{ border-color:var(--green); background:#eafaf2; }
+  .correct-pick{ font-size:12.5px; }
+
+  /* scanner */
   #camWrap{ position:relative; width:100%; background:#000; border-radius:12px; overflow:hidden; }
   #video{ width:100%; display:block; }
   #overlay{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
-  .scan-controls{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
-  .qbadge{ font-family:'Kanit'; font-size:20px; color:var(--navy); font-weight:700; }
-  .live-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:7px; margin-top:10px; }
-  .stu{ border:2px solid #d4d9e6; border-radius:9px; padding:6px 4px; text-align:center; background:#fff; transition:.15s; }
-  .stu .n{ font-size:11px; color:#7a8194; font-weight:600; }
-  .stu .nm{ font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .stu .ans{ font-family:'Kanit'; font-size:22px; font-weight:700; line-height:1.1; color:#c2c8d6; }
-  .stu.answered{ border-color:var(--green); background:#eafaf2; }
-  .stu.answered .ans{ color:var(--green); }
-  .stat{ font-size:13px; color:#555; }
-  .pill{ display:inline-block; background:#eef2fb; border-radius:20px; padding:3px 10px; font-size:13px; font-weight:600; margin:2px; }
+  .qbadge{ font-family:'Kanit'; font-size:18px; color:var(--navy); font-weight:700; }
+  .live-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:7px; margin-top:10px; }
+  .stu{ border:2px solid #d4d9e6; border-radius:9px; padding:6px 4px; text-align:center; background:#fff; }
+  .stu .n{ font-size:11px; color:#7a8194; font-weight:600;}
+  .stu .nm{ font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .stu .ans{ font-family:'Kanit'; font-size:22px; font-weight:700; color:#c2c8d6; line-height:1.1;}
+  .stu.answered{ border-color:var(--green); background:#eafaf2;}
+  .stu.answered .ans{ color:var(--green);}
+  .qshow{ background:#fff7e8; border:1.5px solid var(--amber); border-radius:10px; padding:10px 12px; margin-bottom:10px;}
+  .qshow .qt{ font-weight:700; font-size:15px; margin-bottom:6px;}
+  .qshow .ch{ font-size:13.5px; margin:2px 0;}
 
-  /* ---------- GENERATOR ---------- */
-  .gen-cards{ display:grid; grid-template-columns:repeat(2,1fr); gap:10mm; }
-  .pcard{ border:1.5px dashed #bbb; border-radius:8px; padding:8mm 6mm; text-align:center; position:relative; aspect-ratio:1/1.15; display:flex; flex-direction:column; }
-  .pcard .corner{ position:absolute; font-family:'Kanit'; font-weight:700; font-size:20px; color:#333; }
-  .pcard .c-tl{ top:4mm; left:5mm; } .pcard .c-tr{ top:4mm; right:5mm; }
-  .pcard .c-bl{ bottom:4mm; left:5mm; transform:rotate(180deg);} .pcard .c-br{ bottom:4mm; right:5mm; transform:rotate(180deg);}
-  .pcard .marker-area{ flex:1; display:flex; align-items:center; justify-content:center; position:relative; }
-  .pcard .marker-area svg{ width:62%; height:auto; }
-  .pcard .side{ position:absolute; font-family:'Kanit'; font-weight:800; font-size:26px; color:#111; }
-  .pcard .s-top{ top:7mm; left:50%; transform:translateX(-50%);}
-  .pcard .s-bottom{ bottom:7mm; left:50%; transform:translateX(-50%) rotate(180deg);}
-  .pcard .s-left{ left:4mm; top:50%; transform:translateY(-50%) rotate(-90deg);}
-  .pcard .s-right{ right:4mm; top:50%; transform:translateY(-50%) rotate(90deg);}
-  .pcard .stu-name{ position:absolute; bottom:1.5mm; left:50%; transform:translateX(-50%); font-size:11px; color:#666; }
+  /* results */
+  table.res{ width:100%; border-collapse:collapse; font-size:13px;}
+  table.res th, table.res td{ border:1px solid #dde2ec; padding:6px 8px; text-align:center;}
+  table.res th{ background:var(--navy); color:#fff; font-weight:700; position:sticky; top:0;}
+  table.res td.name{ text-align:left;}
+  .up{ color:var(--green); font-weight:700;} .down{ color:var(--red); font-weight:700;} .same{ color:#888;}
+  .scroll{ overflow:auto; max-height:70vh; }
+
+  /* generator */
+  .gen-cards{ display:grid; grid-template-columns:repeat(2,1fr); gap:10mm;}
+  .pcard{ border:1.5px dashed #bbb; border-radius:8px; padding:8mm 6mm; text-align:center; position:relative; aspect-ratio:1/1.15; display:flex; flex-direction:column;}
+  .pcard .corner{ position:absolute; font-family:'Kanit'; font-weight:700; font-size:20px; color:#333;}
+  .pcard .c-tl{top:4mm;left:5mm;} .pcard .c-tr{top:4mm;right:5mm;}
+  .pcard .c-bl{bottom:4mm;left:5mm;transform:rotate(180deg);} .pcard .c-br{bottom:4mm;right:5mm;transform:rotate(180deg);}
+  .pcard .marker-area{ flex:1; display:flex; align-items:center; justify-content:center; position:relative;}
+  .pcard .marker-area svg{ width:62%; height:auto;}
+  .pcard .side{ position:absolute; font-family:'Kanit'; font-weight:800; font-size:28px; color:#111;}
+  .pcard .s-top{top:7mm;left:50%;transform:translateX(-50%);}
+  .pcard .s-bottom{bottom:7mm;left:50%;transform:translateX(-50%) rotate(180deg);}
+  .pcard .s-left{left:3mm;top:50%;transform:translateY(-50%) rotate(-90deg);}
+  .pcard .s-right{right:3mm;top:50%;transform:translateY(-50%) rotate(90deg);}
+  .pcard .stu-name{ position:absolute; bottom:1.5mm; left:50%; transform:translateX(-50%); font-size:11px; color:#666;}
+
   @media print{
-    header,.tabs,.no-print,#scanView{ display:none !important; }
-    .view{ padding:0; max-width:none; } #genView{ display:block !important; }
-    .gen-cards{ gap:6mm; } .pcard{ border:1px solid #ddd; page-break-inside:avoid; }
-    .gen-config{ display:none !important; }
+    header,.no-print{ display:none !important;}
+    .view{ padding:0; max-width:none;} .view:not(#genView){ display:none !important;}
+    #genView{ display:block !important;}
+    .pcard{ border:1px solid #ddd; page-break-inside:avoid;}
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>🃏 การ์ดตอบคำถาม ArUco</h1>
-  <span style="font-size:12px;opacity:.8;">POC · เหมือน Plickers แต่เปิดสูตรเอง</span>
+  <h1>🃏 ระบบทดสอบด้วยการ์ด</h1>
+  <span class="muted" style="color:#bcc6e0;">ก่อนเรียน–หลังเรียน</span>
   <div class="tabs">
-    <button id="tabScan" class="active" onclick="showView('scan')">📷 สแกนตอบ</button>
-    <button id="tabGen" onclick="showView('gen')">🖨️ สร้างการ์ด</button>
+    <button id="t_test" class="active" onclick="showView('test')">📷 สอบ</button>
+    <button id="t_q" onclick="showView('q')">📝 คำถาม</button>
+    <button id="t_res" onclick="showView('res')">📊 ผลสอบ</button>
+    <button id="t_gen" onclick="showView('gen')">🖨️ การ์ด</button>
+    <button id="t_set" onclick="showView('set')">⚙️ ตั้งค่า</button>
   </div>
 </header>
 
-<!-- ============ SCANNER ============ -->
-<div id="scanView" class="view active">
-  <div class="card-panel">
-    <div class="scan-controls">
+<!-- ============ TEST / SCAN ============ -->
+<div id="testView" class="view active">
+  <div class="panel">
+    <div class="row" style="margin-bottom:8px;">
+      <label>โหมด:</label>
+      <select id="modeSel" onchange="onModeChange()">
+        <option value="pre">📘 ก่อนเรียน (Pre-test)</option>
+        <option value="post">📗 หลังเรียน (Post-test)</option>
+      </select>
+      <span id="modeTag"></span>
+    </div>
+    <div class="row">
       <button class="act green" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
       <button class="act gray" id="btnStop" onclick="stopCam()" style="display:none;">⏸️ ปิดกล้อง</button>
-      <span class="qbadge">ข้อที่ <span id="qnum">1</span></span>
-      <button class="act" onclick="changeQ(-1)">◀ ข้อก่อน</button>
-      <button class="act" onclick="changeQ(1)">ข้อถัดไป ▶</button>
-      <button class="act red" onclick="clearQ()">ล้างข้อนี้</button>
-      <span class="stat" id="scanStat">ยังไม่เปิดกล้อง</span>
+      <span class="qbadge">ข้อ <span id="qnum">๑</span>/<span id="qtotal">๑๐</span></span>
+      <button class="act sm" onclick="changeQ(-1)">◀ ก่อน</button>
+      <button class="act sm" onclick="changeQ(1)">ถัดไป ▶</button>
+      <button class="act red sm" onclick="clearQ()">ล้างข้อนี้</button>
+      <span class="muted" id="scanStat">ยังไม่เปิดกล้อง</span>
     </div>
+  </div>
+
+  <div class="panel" id="qShowPanel"></div>
+
+  <div class="panel">
     <div id="camWrap">
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
     </div>
   </div>
 
-  <div class="card-panel">
-    <h2>ผลตอบสด · ข้อที่ <span id="qnum2">1</span> <span class="stat" id="answerCount"></span></h2>
+  <div class="panel">
+    <h2>ตอบสด · ข้อ <span id="qnum2">๑</span> <span class="muted" id="answerCount"></span></h2>
     <div class="live-grid" id="liveGrid"></div>
   </div>
 </div>
 
+<!-- ============ QUESTIONS ============ -->
+<div id="qView" class="view">
+  <div class="panel">
+    <div class="row">
+      <label>ชื่อชุดข้อสอบ:</label> <input id="qsetName" style="flex:1;min-width:200px;" placeholder="เช่น ประเมินความน่าเชื่อถือของสื่อ">
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="act green sm" onclick="addQuestion()">➕ เพิ่มข้อ</button>
+      <button class="act sm" onclick="saveQuestions()">💾 บันทึกชุดข้อสอบ</button>
+      <span class="muted" id="qSaveStat"></span>
+    </div>
+  </div>
+  <div id="qList"></div>
+</div>
+
+<!-- ============ RESULTS ============ -->
+<div id="resView" class="view">
+  <div class="panel">
+    <h2>📊 สรุปผล &amp; เปรียบเทียบ ก่อนเรียน–หลังเรียน</h2>
+    <div class="row">
+      <button class="act sm" onclick="renderResults()">🔄 คำนวณใหม่</button>
+      <button class="act green sm" onclick="exportCSV()">⬇️ ดาวน์โหลด Excel/CSV</button>
+      <button class="act purple sm" onclick="sendToSheets()">📤 ส่งเข้า Google Sheets</button>
+      <span class="muted" id="resStat"></span>
+    </div>
+  </div>
+  <div class="panel scroll" id="resTable"></div>
+</div>
+
 <!-- ============ GENERATOR ============ -->
 <div id="genView" class="view">
-  <div class="card-panel gen-config no-print">
-    <h2>ตั้งค่าการ์ด</h2>
-    <p style="font-size:13px;color:#555;margin:4px 0 10px;">ใส่รายชื่อทีละบรรทัด (เลขที่จะไล่ ๑,๒,๓...) หรือเว้นว่างเพื่อสร้างเลขล้วน · การ์ดใบที่ N ใช้มาร์กเกอร์ ID = N</p>
-    <textarea id="roster" rows="5" style="width:100%;" placeholder="เช่น&#10;เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..."></textarea>
-    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <label>จำนวนการ์ด (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
-      <button class="act" onclick="buildCards()">สร้างการ์ด</button>
-      <button class="act green" onclick="window.print()">🖨️ พิมพ์ / PDF</button>
+  <div class="panel no-print">
+    <h2>สร้างการ์ดนักเรียน</h2>
+    <p class="muted">ใส่รายชื่อทีละบรรทัด (เลขที่ไล่ ๑,๒,๓...) · การ์ดใบที่ N ใช้รหัส N · นักเรียนพลิกให้ตัวอักษร (ก/ข/ค/ง) ที่ตอบอยู่ "ด้านบน"</p>
+    <textarea id="roster" rows="5" style="width:100%;" placeholder="เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..." oninput="rosterChanged()"></textarea>
+    <div class="row" style="margin-top:8px;">
+      <label>จำนวน (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
+      <button class="act sm" onclick="buildCards()">สร้างการ์ด</button>
+      <button class="act green sm" onclick="window.print()">🖨️ พิมพ์ / PDF</button>
     </div>
   </div>
   <div class="gen-cards" id="genCards"></div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="setView" class="view">
+  <div class="panel">
+    <h2>⚙️ ตั้งค่า Google Sheets</h2>
+    <p class="muted">วาง URL ของ Google Apps Script (Web App) ที่เปิดไว้ แล้วผลสอบจะส่งเข้าชีตได้ · ถ้ายังไม่มี ใช้ดาวน์โหลด Excel ไปก่อนได้</p>
+    <div class="row">
+      <input id="gasUrl" style="flex:1; min-width:260px;" placeholder="https://script.google.com/macros/s/..../exec">
+      <button class="act sm" onclick="saveGasUrl()">บันทึก URL</button>
+      <button class="act gray sm" onclick="testSheets()">ทดสอบการเชื่อมต่อ</button>
+    </div>
+    <p class="muted" id="setStat" style="margin-top:8px;"></p>
+  </div>
+  <div class="panel">
+    <h2>🗑️ ข้อมูล</h2>
+    <div class="row">
+      <button class="act red sm" onclick="resetSessions()">ล้างผลสอบทั้งหมด (เก็บคำถาม/รายชื่อ)</button>
+      <button class="act red sm" onclick="resetAll()">ล้างทุกอย่างกลับค่าเริ่มต้น</button>
+    </div>
+  </div>
 </div>
 
 <canvas id="work" style="display:none;"></canvas>
@@ -115,186 +206,273 @@
 <script src="lib/cv.js"></script>
 <script src="lib/aruco.js"></script>
 <script>
-const DICT = 'ARUCO_MIP_36h12';     // ดิกชันนารีแข็งแรง กันอ่านผิด (tau=12)
-const DET_WIDTH = 720;              // ความกว้างเฟรมที่ใช้ตรวจ (ปรับได้: มาก=ชัดไกลขึ้นแต่ช้าลง)
-const LETTERS = ['A','B','C','D'];  // A=บน B=ขวา C=ล่าง D=ซ้าย (canonical)
+/* ===================== ค่าคงที่ + ตัวแปร ===================== */
+const DICT='ARUCO_MIP_36h12', DET_WIDTH=720;
+const SIDES=['ก','ข','ค','ง'];   // บน, ขวา, ล่าง, ซ้าย (canonical)
+const LS='cardscan_v2';
+let detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
+let dict=new AR.Dictionary(DICT);
 
-// maxHammingDistance:4 — กัน id ผี (false positive) แต่ยังเผื่อ noise กล้องจริงได้ (พิสูจน์ด้วย test_hamming.js)
-let detector = new AR.Detector({ dictionaryName: DICT, maxHammingDistance: 4 });
-let dict = new AR.Dictionary(DICT);
+let state={
+  qsetName:'', questions:[], roster:[],
+  sessions:{ pre:{}, post:{} },   // sessions[mode][studentId][qIndex] = 'ก'/'ข'/'ค'/'ง'
+  gasUrl:''
+};
+let curMode='pre', curQ=0;
 
+function thaiNum(n){ return String(n).replace(/[0-9]/g,d=>'๐๑๒๓๔๕๖๗๘๙'[d]); }
+
+/* ===================== โหลด/บันทึก ===================== */
+function save(){ localStorage.setItem(LS, JSON.stringify(state)); }
+function load(){
+  const raw=localStorage.getItem(LS);
+  if(raw){ try{ state=Object.assign(state, JSON.parse(raw)); }catch(e){} }
+  if(!state.questions || state.questions.length===0) loadDefaultQuestions();
+  if(!state.roster) state.roster=[];
+  if(!state.sessions) state.sessions={pre:{},post:{}};
+}
+
+/* ===================== คำถามตัวอย่าง (ชุดของครู) ===================== */
+function loadDefaultQuestions(){
+  state.qsetName='ประเมินความน่าเชื่อถือของสื่อที่มีเนื้อหาโน้มน้าวใจ';
+  const Q=[
+   ['ข้อใดคือจุดประสงค์หลักที่สำคัญที่สุดของสื่อโน้มน้าวใจ',['เพื่อความบันเทิงและผ่อนคลายอารมณ์','เพื่อเปลี่ยนแปลงทัศนคติหรือพฤติกรรมของผู้รับสาร','เพื่อแจ้งข่าวสารเหตุการณ์ประจำวันให้ทราบ','เพื่อบันทึกประวัติศาสตร์และเรื่องราวในอดีต'],'ข'],
+   ['เมื่ออ่านบทความโฆษณาสินค้า การแยกแยะสิ่งใดจะช่วยให้ประเมินความน่าเชื่อถือได้ดีที่สุด',['แยกแยะระหว่างภาษาทางการและภาษากันเอง','แยกแยะระหว่างข้อเท็จจริงและข้อคิดเห็น','แยกแยะระหว่างชื่อสินค้าและราคาสินค้า','แยกแยะระหว่างรูปภาพและตัวอักษร'],'ข'],
+   ['ข้อความโฆษณาในข้อใดใช้ถ้อยคำเพื่อสร้างความเป็นพวกเดียวกันระหว่างผู้ส่งสารกับผู้รับสาร',['เราเข้าใจดีว่าสุขภาพของคุณสำคัญที่สุด ให้เราดูแลคุณนะครับ','กรุณาอ่านคำเตือนในฉลากก่อนบริโภคทุกครั้ง','จำหน่ายแล้ววันนี้ที่ห้างสรรพสินค้าชั้นนำทั่วไป','สินค้าชนิดนี้ผลิตจากห้องปฏิบัติการที่ได้รับมาตรฐานสากล'],'ก'],
+   ['ในบทความวิชาการที่แฝงการขายสินค้า ข้อใดเป็นสัญญาณเตือนว่าสื่อนี้ "ขาดความเป็นกลาง"',['การให้ข้อมูลเพียงด้านเดียวและโจมตีข้อเสียของคู่แข่งอย่างรุนแรง','การระบุแหล่งที่มาของข้อมูลอ้างอิงอย่างชัดเจน','การใช้ภาษาที่เป็นทางการและสุภาพ','การใช้แผนภูมิและกราฟเพื่อแสดงข้อมูลสถิติ'],'ก'],
+   ['หากพบโฆษณาอาหารเสริมอ้างว่ารักษาได้สารพัดโรคใน 7 วัน ควรใช้วิธีใดในการวิเคราะห์เป็นอันดับแรก',['สอบถามเพื่อนร่วมชั้นว่ามีใครเคยใช้สินค้านี้หรือไม่','ตรวจสอบความสมเหตุสมผลและความเป็นไปได้ตามหลักวิทยาศาสตร์','พิจารณาความสวยงามของการออกแบบสื่อโฆษณา','ดูว่ามีดาราหรือบุคคลที่มีชื่อเสียงเป็นพรีเซนเตอร์หรือไม่'],'ข'],
+   ['ข้อใดเป็นเทคนิคการโน้มน้าวใจแบบอ้างความเชี่ยวชาญหรือบุคคลที่มีชื่อเสียง',['ทุกคนในหมู่บ้านเลือกใช้บริการจากเรา','ข้าวหอมมะลิแท้จากทุ่งกุลาร้องไห้','คุณหมอสมชายยืนยัน ยาสีฟันนี้ช่วยลดการเสียวฟันได้จริง','ซื้อ 1 แถม 1 เฉพาะวันนี้วันเดียวเท่านั้น'],'ค'],
+   ['เมื่อได้รับข่าวสารจากโซเชียลที่ด่วนมากและขอให้แชร์ต่อทันที สิ่งที่ควรทำก่อนเชื่อคืออะไร',['เชื่อทันทีถ้าเพื่อนสนิทเป็นคนส่งมาให้','ตรวจสอบแหล่งที่มาและเปรียบเทียบข้อมูลจากสำนักข่าวที่น่าเชื่อถือหลายแห่ง','ดูยอดการกดไลก์และแชร์ว่ามีจำนวนมากหรือไม่','รีบส่งต่อให้เพื่อนทันทีเพราะกลัวว่าเพื่อนจะตกข่าว'],'ข'],
+   ['การนำผลวิจัยเพียงบางส่วนมานำเสนอเพื่อโน้มน้าวให้ซื้อผลิตภัณฑ์สุขภาพ จัดเป็นการกระทำลักษณะใด',['การปฏิบัติตามหลักจริยธรรมของนักโฆษณา','การเผยแพร่ความรู้สู่ชุมชนอย่างสร้างสรรค์','การสรุปผลการวิจัยอย่างมีประสิทธิภาพ','การบิดเบือนข้อมูลโดยการเลือกนำเสนอ'],'ง'],
+   ['หากต้องสร้างสื่อรณรงค์ "ลดใช้พลาสติก" ให้น่าเชื่อถือและโน้มน้าวใจได้ดี ควรใช้องค์ประกอบใด',['ใช้การข่มขู่ด้วยถ้อยคำรุนแรงเพื่อให้คนเกิดความกลัว','เขียนข้อความให้ยาวที่สุดเพื่อให้ดูว่ามีความรู้เยอะ','ใช้ข้อมูลสถิติที่ถูกต้องร่วมกับการนำเสนอผลกระทบต่อสิ่งแวดล้อมที่เห็นภาพชัดเจน','เน้นการจ้างดาราค่าตัวแพงที่สุดมาเป็นพรีเซนเตอร์เพียงอย่างเดียว'],'ค'],
+   ['การใช้วิจารณญาณในการรับสื่อโน้มน้าวใจมีความสำคัญอย่างไรในชีวิตประจำวัน',['ช่วยให้เลือกซื้อสินค้าราคาแพงได้โดยไม่ต้องกังวล','ช่วยให้เราสามารถโต้เถียงกับผู้อื่นได้เก่งขึ้น','ช่วยให้จำข้อความในโฆษณาได้แม่นยำกว่าคนอื่น','ช่วยให้ไม่ตกเป็นเหยื่อของการหลอกลวงและตัดสินใจได้ถูกต้องบนพื้นฐานความจริง'],'ง'],
+  ];
+  state.questions = Q.map(q=>({text:q[0], choices:q[1], correct:q[2]}));
+}
+
+/* ===================== แท็บ ===================== */
 function showView(v){
-  document.getElementById('scanView').classList.toggle('active', v==='scan');
-  document.getElementById('genView').classList.toggle('active', v==='gen');
-  document.getElementById('tabScan').classList.toggle('active', v==='scan');
-  document.getElementById('tabGen').classList.toggle('active', v==='gen');
+  ['test','q','res','gen','set'].forEach(x=>{
+    document.getElementById(x+'View').classList.toggle('active', x===v);
+    document.getElementById('t_'+x).classList.toggle('active', x===v);
+  });
+  if(v==='q') renderQEditor();
+  if(v==='res') renderResults();
+  if(v==='test'){ renderQShow(); renderLiveGrid(); }
 }
 
-/* ================= ROSTER (ใช้ร่วมกัน) ================= */
-function getRoster(){
-  let lines = document.getElementById('roster').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if (lines.length === 0){
-    let n = parseInt(document.getElementById('genCount').value) || 25;
-    return Array.from({length:n}, (_,i)=>({ id:i+1, name:'' }));
+/* ===================== รายชื่อ ===================== */
+function getRosterFromInput(){
+  let lines=document.getElementById('roster').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(lines.length===0){ let n=parseInt(document.getElementById('genCount').value)||25; return Array.from({length:n},(_,i)=>({id:i+1,name:''})); }
+  return lines.map((name,i)=>({id:i+1,name}));
+}
+function rosterChanged(){ state.roster=getRosterFromInput(); save(); renderLiveGrid(); }
+
+/* ===================== คำถาม: ตัวแก้ไข ===================== */
+function renderQEditor(){
+  document.getElementById('qsetName').value=state.qsetName||'';
+  const list=document.getElementById('qList'); list.innerHTML='';
+  state.questions.forEach((q,qi)=>{
+    const d=document.createElement('div'); d.className='q-item panel';
+    let chHtml='';
+    ['ก','ข','ค','ง'].forEach((L,ci)=>{
+      chHtml+='<div class="choice-row '+(q.correct===L?'correct':'')+'">'+
+        '<span class="lab">'+L+'</span>'+
+        '<input type="text" value="'+(q.choices[ci]||'').replace(/"/g,'&quot;')+'" oninput="editChoice('+qi+','+ci+',this.value)">'+
+        '<label class="correct-pick"><input type="radio" name="correct'+qi+'" '+(q.correct===L?'checked':'')+' onchange="setCorrect('+qi+',\''+L+'\')"> เฉลย</label>'+
+        '</div>';
+    });
+    d.innerHTML='<div class="qhead"><div class="qno">'+thaiNum(qi+1)+'</div>'+
+      '<textarea rows="2" oninput="editQText('+qi+',this.value)" placeholder="โจทย์...">'+(q.text||'')+'</textarea>'+
+      '<button class="act red sm" onclick="delQuestion('+qi+')">ลบ</button></div>'+chHtml;
+    list.appendChild(d);
+  });
+}
+function editQText(i,v){ state.questions[i].text=v; }
+function editChoice(qi,ci,v){ state.questions[qi].choices[ci]=v; }
+function setCorrect(qi,L){ state.questions[qi].correct=L; renderQEditor(); }
+function addQuestion(){ state.questions.push({text:'',choices:['','','',''],correct:'ก'}); renderQEditor(); }
+function delQuestion(i){ if(confirm('ลบข้อ '+(i+1)+'?')){ state.questions.splice(i,1); renderQEditor(); save(); } }
+function saveQuestions(){ state.qsetName=document.getElementById('qsetName').value; save(); document.getElementById('qSaveStat').textContent='✅ บันทึกแล้ว ('+state.questions.length+' ข้อ)'; document.getElementById('qtotal').textContent=thaiNum(state.questions.length); }
+
+/* ===================== สอบ: แสดงโจทย์ + สแกน ===================== */
+function onModeChange(){ curMode=document.getElementById('modeSel').value; renderModeTag(); renderLiveGrid(); }
+function renderModeTag(){ const t=document.getElementById('modeTag'); t.className='tag '+curMode; t.textContent= curMode==='pre'?'กำลังบันทึก: ก่อนเรียน':'กำลังบันทึก: หลังเรียน'; }
+function renderQShow(){
+  const q=state.questions[curQ];
+  const p=document.getElementById('qShowPanel');
+  if(!q){ p.innerHTML='<div class="muted">ยังไม่มีคำถาม ไปที่แท็บ 📝 คำถาม</div>'; return; }
+  let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{ ch+='<div class="ch"><b>'+L+'.</b> '+(q.choices[i]||'')+'</div>'; });
+  p.innerHTML='<div class="qshow"><div class="qt">ข้อ '+thaiNum(curQ+1)+'. '+(q.text||'')+'</div>'+ch+'</div>';
+}
+function ensureSess(){ const m=state.sessions[curMode]; return m; }
+
+const video=document.getElementById('video'),overlay=document.getElementById('overlay'),octx=overlay.getContext('2d');
+const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
+let stream=null,running=false,lastDetect=0;
+
+async function startCam(){
+  state.roster=getRosterFromInput(); save(); renderLiveGrid();
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:960}},audio:false}); }
+  catch(e){ document.getElementById('scanStat').textContent='❌ เปิดกล้องไม่ได้: '+e.message+' (ต้องเปิดผ่าน https)'; return; }
+  video.srcObject=stream; await video.play();
+  document.getElementById('btnStart').style.display='none'; document.getElementById('btnStop').style.display='inline-block';
+  running=true; loop();
+}
+function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; }
+
+function loop(){
+  if(!running)return; requestAnimationFrame(loop);
+  const now=performance.now(); if(now-lastDetect<90)return; lastDetect=now;
+  if(video.videoWidth===0)return;
+  const dw=DET_WIDTH,dh=Math.round(DET_WIDTH*video.videoHeight/video.videoWidth);
+  if(work.width!==dw){work.width=dw;work.height=dh;overlay.width=dw;overlay.height=dh;}
+  wctx.drawImage(video,0,0,dw,dh);
+  let markers=[]; try{ markers=detector.detect(wctx.getImageData(0,0,dw,dh)); }catch(e){}
+  octx.clearRect(0,0,dw,dh);
+  const sess=ensureSess();
+  markers.forEach(m=>{
+    const ans=answerFromCorners(m.corners); if(!ans)return;
+    const stu=state.roster.find(s=>s.id===m.id);
+    if(stu){ if(!sess[m.id])sess[m.id]={}; sess[m.id][curQ]=ans; }
+    drawMarker(m.corners,m.id,ans,!!stu);
+  });
+  document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
+  renderLiveGrid();
+}
+function answerFromCorners(c){
+  if(!c||c.length!==4)return null;
+  const m=[{L:'ก',y:(c[0].y+c[1].y)/2},{L:'ข',y:(c[1].y+c[2].y)/2},{L:'ค',y:(c[2].y+c[3].y)/2},{L:'ง',y:(c[3].y+c[0].y)/2}];
+  m.sort((a,b)=>a.y-b.y); return m[0].L;
+}
+function drawMarker(c,id,ans,known){
+  octx.beginPath(); octx.moveTo(c[0].x,c[0].y); for(let i=1;i<4;i++)octx.lineTo(c[i].x,c[i].y); octx.closePath();
+  octx.lineWidth=3; octx.strokeStyle=known?'#1aa363':'#e23b4e'; octx.stroke();
+  const cx=(c[0].x+c[1].x+c[2].x+c[3].x)/4,cy=(c[0].y+c[1].y+c[2].y+c[3].y)/4;
+  octx.fillStyle=known?'#1aa363':'#e23b4e'; octx.font='bold 28px Kanit'; octx.textAlign='center'; octx.textBaseline='middle';
+  octx.fillText(ans,cx,cy); octx.fillStyle='#fff'; octx.font='bold 12px Sarabun'; octx.fillText('#'+id,cx,cy+21);
+}
+function renderLiveGrid(){
+  const grid=document.getElementById('liveGrid'); const sess=ensureSess();
+  if(grid.childElementCount!==state.roster.length){
+    grid.innerHTML='';
+    state.roster.forEach(s=>{ const d=document.createElement('div'); d.className='stu'; d.id='stu_'+s.id;
+      d.innerHTML='<div class="n">เลขที่ '+thaiNum(s.id)+'</div><div class="nm">'+(s.name||'&nbsp;')+'</div><div class="ans">–</div>'; grid.appendChild(d); });
   }
-  return lines.map((name,i)=>({ id:i+1, name }));
+  let answered=0;
+  state.roster.forEach(s=>{ const d=document.getElementById('stu_'+s.id); if(!d)return;
+    const a=sess[s.id]&&sess[s.id][curQ]; d.classList.toggle('answered',!!a); d.querySelector('.ans').textContent=a||'–'; if(a)answered++; });
+  document.getElementById('answerCount').textContent='· ตอบแล้ว '+answered+'/'+state.roster.length+' คน';
+  document.getElementById('qnum').textContent=thaiNum(curQ+1);
+  document.getElementById('qnum2').textContent=thaiNum(curQ+1);
+  document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 }
-function thaiNum(n){ return String(n).replace(/[0-9]/g, d=>'๐๑๒๓๔๕๖๗๘๙'[d]); }
+function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); }
+function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); renderLiveGrid(); save(); } }
 
-/* ================= GENERATOR ================= */
+/* ===================== ผลสอบ ===================== */
+function scoreOf(mode,sid){
+  const sess=state.sessions[mode]; if(!sess[sid])return {score:0,answered:0};
+  let sc=0,ans=0;
+  state.questions.forEach((q,qi)=>{ const a=sess[sid][qi]; if(a!=null){ans++; if(a===q.correct)sc++;} });
+  return {score:sc,answered:ans};
+}
+function renderResults(){
+  const total=state.questions.length;
+  let html='<table class="res"><thead><tr><th>เลขที่</th><th class="name">ชื่อ</th><th>ก่อนเรียน</th><th>หลังเรียน</th><th>พัฒนาการ</th></tr></thead><tbody>';
+  let sumPre=0,sumPost=0,nPre=0,nPost=0;
+  state.roster.forEach(s=>{
+    const pre=scoreOf('pre',s.id),post=scoreOf('post',s.id);
+    const hasPre=pre.answered>0,hasPost=post.answered>0;
+    if(hasPre){sumPre+=pre.score;nPre++;} if(hasPost){sumPost+=post.score;nPost++;}
+    let diff='–',cls='same';
+    if(hasPre&&hasPost){ const d=post.score-pre.score; diff=(d>0?'▲ +'+d:(d<0?'▼ '+d:'= 0')); cls=d>0?'up':(d<0?'down':'same'); }
+    html+='<tr><td>'+thaiNum(s.id)+'</td><td class="name">'+(s.name||'-')+'</td>'+
+      '<td>'+(hasPre?pre.score+'/'+total:'–')+'</td>'+
+      '<td>'+(hasPost?post.score+'/'+total:'–')+'</td>'+
+      '<td class="'+cls+'">'+diff+'</td></tr>';
+  });
+  html+='</tbody><tfoot><tr style="font-weight:700;background:#f0f3fa;"><td colspan="2">เฉลี่ยทั้งห้อง</td>'+
+    '<td>'+(nPre?(sumPre/nPre).toFixed(1):'–')+'</td><td>'+(nPost?(sumPost/nPost).toFixed(1):'–')+'</td>'+
+    '<td class="up">'+((nPre&&nPost)?('+'+((sumPost/nPost)-(sumPre/nPre)).toFixed(1)):'–')+'</td></tr></tfoot></table>';
+  document.getElementById('resTable').innerHTML=html;
+}
+function exportCSV(){
+  const total=state.questions.length;
+  let rows=[['เลขที่','ชื่อ','คะแนนก่อนเรียน','คะแนนหลังเรียน','พัฒนาการ','คำตอบก่อนเรียน','คำตอบหลังเรียน']];
+  state.roster.forEach(s=>{
+    const pre=scoreOf('pre',s.id),post=scoreOf('post',s.id);
+    const ansStr=mode=>{ const sess=state.sessions[mode]; if(!sess[s.id])return ''; return state.questions.map((q,qi)=>sess[s.id][qi]||'-').join(' '); };
+    const d=(pre.answered>0&&post.answered>0)?(post.score-pre.score):'';
+    rows.push([s.id,s.name||'',pre.answered>0?pre.score:'',post.answered>0?post.score:'',d,ansStr('pre'),ansStr('post')]);
+  });
+  const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='ผลสอบ_'+(state.qsetName||'cardscan')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ===================== Google Sheets ===================== */
+function saveGasUrl(){ state.gasUrl=document.getElementById('gasUrl').value.trim(); save(); document.getElementById('setStat').textContent='✅ บันทึก URL แล้ว'; }
+function gasGet(params){
+  return new Promise((resolve)=>{
+    const url=state.gasUrl+(state.gasUrl.includes('?')?'&':'?')+new URLSearchParams(params).toString();
+    const img=new Image(); img.onload=()=>resolve(true); img.onerror=()=>resolve(true); img.src=url; // fire GET (เลี่ยงปัญหา CORS/302 ของ GAS)
+  });
+}
+async function testSheets(){
+  if(!state.gasUrl){ document.getElementById('setStat').textContent='⚠️ ยังไม่ได้ใส่ URL'; return; }
+  document.getElementById('setStat').textContent='⏳ กำลังทดสอบ...';
+  await gasGet({action:'ping'});
+  document.getElementById('setStat').textContent='📤 ส่งคำขอทดสอบแล้ว — เช็คในชีตว่ามีแถว ping เข้ามาไหม (ถ้ามี = เชื่อมได้)';
+}
+async function sendToSheets(){
+  if(!state.gasUrl){ document.getElementById('resStat').textContent='⚠️ ไปตั้งค่า URL ที่แท็บ ⚙️ ก่อน'; showView('set'); return; }
+  const total=state.questions.length, date=new Date().toLocaleDateString('th-TH');
+  document.getElementById('resStat').textContent='⏳ กำลังส่ง...';
+  let sent=0;
+  for(const s of state.roster){
+    for(const mode of ['pre','post']){
+      const sess=state.sessions[mode]; if(!sess[s.id])continue;
+      const sc=scoreOf(mode,s.id); if(sc.answered===0)continue;
+      const answers=state.questions.map((q,qi)=>sess[s.id][qi]||'-').join('');
+      await gasGet({action:'save',date,qset:state.qsetName,mode,id:s.id,name:s.name||'',score:sc.score,total,answers});
+      sent++;
+    }
+  }
+  document.getElementById('resStat').textContent='✅ ส่งแล้ว '+sent+' รายการ — เช็คใน Google Sheets';
+}
+
+/* ===================== generator ===================== */
 function buildCards(){
-  const roster = getRoster();
-  const wrap = document.getElementById('genCards');
-  wrap.innerHTML = '';
-  roster.forEach(stu=>{
-    const svg = dict.generateSVG(stu.id);
-    const num = thaiNum(stu.id);
-    const card = document.createElement('div');
-    card.className = 'pcard';
-    card.innerHTML =
-      '<div class="corner c-tl">'+num+'</div><div class="corner c-tr">'+num+'</div>'+
+  state.roster=getRosterFromInput(); save();
+  const wrap=document.getElementById('genCards'); wrap.innerHTML='';
+  state.roster.forEach(stu=>{
+    const svg=dict.generateSVG(stu.id), num=thaiNum(stu.id);
+    const card=document.createElement('div'); card.className='pcard';
+    card.innerHTML='<div class="corner c-tl">'+num+'</div><div class="corner c-tr">'+num+'</div>'+
       '<div class="corner c-bl">'+num+'</div><div class="corner c-br">'+num+'</div>'+
-      '<div class="side s-top">A</div><div class="side s-right">B</div>'+
-      '<div class="side s-bottom">C</div><div class="side s-left">D</div>'+
+      '<div class="side s-top">ก</div><div class="side s-right">ข</div><div class="side s-bottom">ค</div><div class="side s-left">ง</div>'+
       '<div class="marker-area">'+svg+'</div>'+
-      '<div class="stu-name">'+(stu.name? (num+' · '+stu.name) : ('เลขที่ '+num))+'</div>';
+      '<div class="stu-name">'+(stu.name?(num+' · '+stu.name):('เลขที่ '+num))+'</div>';
     wrap.appendChild(card);
   });
 }
 
-/* ================= SCANNER ================= */
-const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const octx = overlay.getContext('2d');
-const work = document.getElementById('work');
-const wctx = work.getContext('2d', { willReadFrequently:true });
-let stream = null, running = false;
-let curQ = 1;
-let answers = {};          // answers[q][studentId] = 'A'/'B'/'C'/'D'
-let roster = [];
+/* ===================== ล้างข้อมูล ===================== */
+function resetSessions(){ if(confirm('ล้างผลสอบ ก่อนเรียน+หลังเรียน ทั้งหมด?')){ state.sessions={pre:{},post:{}}; save(); renderResults(); renderLiveGrid(); } }
+function resetAll(){ if(confirm('ล้างทุกอย่าง (คำถาม รายชื่อ ผลสอบ) กลับค่าเริ่มต้น?')){ localStorage.removeItem(LS); location.reload(); } }
 
-function ensureQ(q){ if(!answers[q]) answers[q] = {}; return answers[q]; }
-
-async function startCam(){
-  roster = getRoster();
-  renderLiveGrid();
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:960} }, audio:false });
-  }catch(e){
-    document.getElementById('scanStat').textContent = '❌ เปิดกล้องไม่ได้: ' + e.message + ' (ต้องเปิดผ่าน https หรือ localhost)';
-    return;
-  }
-  video.srcObject = stream;
-  await video.play();
-  document.getElementById('btnStart').style.display='none';
-  document.getElementById('btnStop').style.display='inline-block';
-  running = true;
-  loop();
-}
-function stopCam(){
-  running = false;
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  document.getElementById('btnStart').style.display='inline-block';
-  document.getElementById('btnStop').style.display='none';
-  document.getElementById('scanStat').textContent = 'ปิดกล้องแล้ว';
-}
-
-let lastDetect = 0;
-function loop(){
-  if(!running) return;
-  requestAnimationFrame(loop);
-  const now = performance.now();
-  if(now - lastDetect < 90) return;   // ~11 fps พอสำหรับตรวจ ประหยัดแบต
-  lastDetect = now;
-  if(video.videoWidth === 0) return;
-
-  const dw = DET_WIDTH, dh = Math.round(DET_WIDTH * video.videoHeight / video.videoWidth);
-  if(work.width !== dw){ work.width=dw; work.height=dh; overlay.width=dw; overlay.height=dh; }
-  wctx.drawImage(video, 0,0, dw,dh);
-  const img = wctx.getImageData(0,0,dw,dh);
-
-  let markers = [];
-  try{ markers = detector.detect(img); }catch(e){}
-
-  octx.clearRect(0,0,dw,dh);
-  const q = ensureQ(curQ);
-  let seen = 0;
-  markers.forEach(m=>{
-    const ans = answerFromCorners(m.corners);
-    if(!ans) return;
-    // บันทึกเฉพาะนักเรียนที่อยู่ใน roster
-    const stu = roster.find(s=>s.id===m.id);
-    if(stu){ q[m.id] = ans; seen++; }
-    drawMarker(m.corners, m.id, ans, !!stu);
-  });
-  document.getElementById('scanStat').textContent = 'กำลังตรวจ... เห็นในเฟรม '+markers.length+' ใบ';
-  renderLiveGrid();
-}
-
-// คำตอบ = ตัวอักษรของ "ด้าน" ที่ชูขึ้นบนสุดบนจอ (เรขาคณิตล้วน ไม่ต้องเดาทิศ)
-// corners เรียง canonical: [TL,TR,BR,BL] → A=บน(TL-TR) B=ขวา(TR-BR) C=ล่าง(BR-BL) D=ซ้าย(BL-TL)
-function answerFromCorners(c){
-  if(!c || c.length!==4) return null;
-  const mids = [
-    { L:'A', y:(c[0].y+c[1].y)/2 },
-    { L:'B', y:(c[1].y+c[2].y)/2 },
-    { L:'C', y:(c[2].y+c[3].y)/2 },
-    { L:'D', y:(c[3].y+c[0].y)/2 },
-  ];
-  mids.sort((a,b)=>a.y-b.y);   // y น้อย = สูงบนจอ
-  return mids[0].L;
-}
-
-function drawMarker(c, id, ans, known){
-  octx.beginPath();
-  octx.moveTo(c[0].x,c[0].y);
-  for(let i=1;i<4;i++) octx.lineTo(c[i].x,c[i].y);
-  octx.closePath();
-  octx.lineWidth=3; octx.strokeStyle = known? '#1aa363':'#e23b4e'; octx.stroke();
-  const cx=(c[0].x+c[1].x+c[2].x+c[3].x)/4, cy=(c[0].y+c[1].y+c[2].y+c[3].y)/4;
-  octx.fillStyle = known? '#1aa363':'#e23b4e';
-  octx.font='bold 26px Kanit, sans-serif'; octx.textAlign='center'; octx.textBaseline='middle';
-  octx.fillText(ans, cx, cy);
-  octx.fillStyle='#fff'; octx.font='bold 12px Sarabun';
-  octx.fillText('#'+id, cx, cy+20);
-}
-
-function renderLiveGrid(){
-  const grid = document.getElementById('liveGrid');
-  const q = ensureQ(curQ);
-  if(grid.childElementCount !== roster.length){
-    grid.innerHTML='';
-    roster.forEach(s=>{
-      const d=document.createElement('div'); d.className='stu'; d.id='stu_'+s.id;
-      d.innerHTML='<div class="n">เลขที่ '+thaiNum(s.id)+'</div><div class="nm">'+(s.name||'&nbsp;')+'</div><div class="ans">–</div>';
-      grid.appendChild(d);
-    });
-  }
-  let answered=0;
-  roster.forEach(s=>{
-    const d=document.getElementById('stu_'+s.id); if(!d) return;
-    const a=q[s.id];
-    d.classList.toggle('answered', !!a);
-    d.querySelector('.ans').textContent = a || '–';
-    if(a) answered++;
-  });
-  document.getElementById('answerCount').textContent = '· ตอบแล้ว '+answered+'/'+roster.length+' คน';
-}
-
-function changeQ(d){
-  curQ = Math.max(1, curQ + d);
-  document.getElementById('qnum').textContent = thaiNum(curQ);
-  document.getElementById('qnum2').textContent = thaiNum(curQ);
-  renderLiveGrid();
-}
-function clearQ(){
-  if(confirm('ล้างคำตอบข้อ '+curQ+' ?')){ answers[curQ]={}; renderLiveGrid(); }
-}
-
-// เริ่มต้น
-roster = getRoster();
-buildCards();
-renderLiveGrid();
+/* ===================== เริ่มต้น ===================== */
+load();
+curMode=document.getElementById('modeSel').value;
+if(state.roster.length){ document.getElementById('roster').value=state.roster.filter(s=>s.name).map(s=>s.name).join('\n'); }
+if(state.gasUrl) document.getElementById('gasUrl').value=state.gasUrl;
+document.getElementById('qsetName').value=state.qsetName||'';
+document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
+renderModeTag(); renderQShow(); buildCards(); renderLiveGrid();
 </script>
 </body>
 </html>
