@@ -206,7 +206,13 @@
 <div id="genView" class="view">
   <div class="panel no-print">
     <h2>สร้างการ์ดนักเรียน</h2>
-    <p class="muted">ใส่รายชื่อทีละบรรทัด (เลขที่ไล่ ๑,๒,๓...) · การ์ดใบที่ N ใช้รหัส N · นักเรียนพลิกให้ตัวอักษร (ก/ข/ค/ง) ที่ตอบอยู่ "ด้านบน"</p>
+    <div class="row" style="margin-bottom:8px; background:#eef4ff; padding:8px; border-radius:8px;">
+      <label>📥 ดึงจากระบบโรงเรียน:</label>
+      <select id="classSel"><option>— กดโหลดห้องก่อน —</option></select>
+      <button class="act sm" onclick="loadClasses()">โหลดห้อง</button>
+      <button class="act green sm" onclick="loadStudents()">ดึงรายชื่อนักเรียน</button>
+    </div>
+    <p class="muted">หรือพิมพ์รายชื่อเองทีละบรรทัด (เลขที่ไล่ ๑,๒,๓...) · การ์ดใบที่ N ใช้รหัส N · นักเรียนพลิกให้ตัวอักษร (ก/ข/ค/ง) ที่ตอบอยู่ "ด้านบน"</p>
     <textarea id="roster" rows="5" style="width:100%;" placeholder="เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..." oninput="rosterChanged()"></textarea>
     <div class="row" style="margin-top:8px;">
       <label>จำนวน (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
@@ -228,6 +234,14 @@
       <button class="act gray sm" onclick="testSheets()">ทดสอบการเชื่อมต่อ</button>
     </div>
     <p class="muted" id="setStat" style="margin-top:8px;"></p>
+  </div>
+  <div class="panel">
+    <h2>👩‍🏫 ครูผู้สอน (ติดไปกับผลในชีต)</h2>
+    <div class="row">
+      <select id="teacherSel" onchange="setTeacher(this.value)" style="min-width:220px;"><option>— กดโหลดรายชื่อครู —</option></select>
+      <button class="act sm" onclick="loadTeachers()">โหลดรายชื่อครู</button>
+      <span class="muted" id="teacherStat"></span>
+    </div>
   </div>
   <div class="panel">
     <h2>🗑️ ข้อมูล</h2>
@@ -254,7 +268,7 @@ let dict=new AR.Dictionary(DICT);
 let state={
   qsetName:'', questions:[], roster:[],
   sessions:{ pre:{}, post:{} },   // sessions[mode][studentId][qIndex] = 'ก'/'ข'/'ค'/'ง'
-  gasUrl:'', roomCode:'bk1'
+  gasUrl:'', roomCode:'bk1', teacherName:''
 };
 let curMode='pre', curQ=0;
 
@@ -308,6 +322,50 @@ function getRosterFromInput(){
 }
 function rosterChanged(){ state.roster=getRosterFromInput(); save(); renderLiveGrid(); }
 
+/* ===================== ดึงข้อมูลจากระบบโรงเรียน (JSONP) ===================== */
+function jsonp(params){
+  return new Promise((resolve,reject)=>{
+    if(!state.gasUrl){ reject('ยังไม่ได้ตั้งค่า URL (แท็บ ⚙️)'); return; }
+    const cb='__cb'+Date.now()+Math.floor(Math.random()*1000);
+    const s=document.createElement('script');
+    function cleanup(){ try{delete window[cb];}catch(e){} s.remove(); }
+    window[cb]=(data)=>{ resolve(data); cleanup(); };
+    const q=Object.assign({},params,{callback:cb});
+    s.src=state.gasUrl+(state.gasUrl.includes('?')?'&':'?')+new URLSearchParams(q).toString();
+    s.onerror=()=>{ reject('เชื่อมต่อไม่ได้'); cleanup(); };
+    document.body.appendChild(s);
+    setTimeout(()=>{ if(window[cb]){ reject('หมดเวลา'); cleanup(); } },15000);
+  });
+}
+async function loadClasses(){
+  const sel=document.getElementById('classSel');
+  sel.innerHTML='<option>กำลังโหลด...</option>';
+  try{ const cls=await jsonp({action:'classes'});
+    sel.innerHTML='<option value="">— เลือกห้อง —</option>'+cls.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+  }catch(e){ sel.innerHTML='<option>โหลดไม่ได้ ('+e+')</option>'; }
+}
+async function loadStudents(){
+  const cid=document.getElementById('classSel').value;
+  if(!cid){ alert('เลือกห้องก่อนครับ (กดโหลดห้อง แล้วเลือก)'); return; }
+  try{
+    const stu=await jsonp({action:'students',class:cid});
+    if(!stu||!stu.length){ alert('ไม่พบนักเรียนในห้องนี้'); return; }
+    state.roster=stu.map(s=>({id:s.number,name:s.name}));
+    document.getElementById('roster').value=state.roster.map(s=>s.name).join('\n');
+    save(); buildCards(); renderLiveGrid();
+    alert('✅ ดึงรายชื่อ '+state.roster.length+' คนแล้ว (เลขที่ตรงกับระบบโรงเรียน)');
+  }catch(e){ alert('ดึงรายชื่อไม่ได้: '+e); }
+}
+async function loadTeachers(){
+  const sel=document.getElementById('teacherSel');
+  sel.innerHTML='<option>กำลังโหลด...</option>';
+  try{ const t=await jsonp({action:'teachers'});
+    sel.innerHTML='<option value="">— เลือกครูผู้สอน —</option>'+t.map(x=>'<option'+(x.name===state.teacherName?' selected':'')+'>'+x.name+(x.position?(' ('+x.position+')'):'')+'</option>').join('');
+    document.getElementById('teacherStat').textContent='โหลด '+t.length+' คน';
+  }catch(e){ sel.innerHTML='<option>โหลดไม่ได้ ('+e+')</option>'; }
+}
+function setTeacher(v){ state.teacherName=(v||'').replace(/ \(.*\)$/,''); save(); }
+
 /* ===================== คำถาม: ตัวแก้ไข ===================== */
 function renderQEditor(){
   document.getElementById('qsetName').value=state.qsetName||'';
@@ -352,7 +410,8 @@ const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFr
 let stream=null,running=false,lastDetect=0;
 
 async function startCam(){
-  state.roster=getRosterFromInput(); save(); renderLiveGrid();
+  if(!state.roster || !state.roster.length) state.roster=getRosterFromInput();
+  save(); renderLiveGrid();
   try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:960}},audio:false}); }
   catch(e){ document.getElementById('scanStat').textContent='❌ เปิดกล้องไม่ได้: '+e.message+' (ต้องเปิดผ่าน https)'; return; }
   video.srcObject=stream; await video.play();
@@ -480,7 +539,7 @@ function renderBig(data){
   document.getElementById('liveQ').innerHTML='<div class="qt">['+modeTh+'] ข้อ '+thaiNum(d.q+1)+'/'+thaiNum(d.total)+' — '+(d.qtext||'')+'</div>'+ch;
   let answered=0,html='';
   (d.students||[]).forEach(s=>{ const a=s.ans; if(a)answered++;
-    html+='<div class="bstu'+(a?' answered':'')+'"><div class="bn">เลขที่ '+thaiNum(s.id)+'</div><div class="bnm">'+(s.name||'')+'</div><div class="bans">'+(a||'–')+'</div></div>'; });
+    html+='<div class="bstu'+(a?' answered':'')+'"><div class="bn">เลขที่ '+thaiNum(s.id)+'</div><div class="bnm">'+(s.name||'')+'</div><div class="bans">'+(a?'✓':'–')+'</div></div>'; });
   document.getElementById('bigGrid').innerHTML=html;
   document.getElementById('liveCount').textContent='ตอบแล้ว '+answered+'/'+(d.students||[]).length+' คน';
 }
@@ -554,7 +613,7 @@ async function sendToSheets(onlyMode){
       const sess=state.sessions[mode]; if(!sess[s.id])continue;
       const sc=scoreOf(mode,s.id); if(sc.answered===0)continue;
       const answers=state.questions.map((q,qi)=>sess[s.id][qi]||'-').join('');
-      await gasGet({action:'save',date,qset:state.qsetName,mode,id:s.id,name:s.name||'',score:sc.score,total,answers});
+      await gasGet({action:'save',date,qset:state.qsetName,teacher:state.teacherName||'',mode,id:s.id,name:s.name||'',score:sc.score,total,answers});
       sent++;
     }
   }
@@ -563,7 +622,8 @@ async function sendToSheets(onlyMode){
 
 /* ===================== generator ===================== */
 function buildCards(){
-  state.roster=getRosterFromInput(); save();
+  if(!state.roster || !state.roster.length) state.roster=getRosterFromInput();
+  save();
   const wrap=document.getElementById('genCards'); wrap.innerHTML='';
   state.roster.forEach(stu=>{
     const svg=dict.generateSVG(stu.id), num=thaiNum(stu.id);
@@ -587,6 +647,8 @@ curMode=document.getElementById('modeSel').value;
 if(state.roster.length){ document.getElementById('roster').value=state.roster.filter(s=>s.name).map(s=>s.name).join('\n'); }
 if(state.gasUrl) document.getElementById('gasUrl').value=state.gasUrl;
 if(!state.roomCode) state.roomCode='bk1';
+if(!state.roster) state.roster=[];
+if(!state.roster.length) state.roster=getRosterFromInput();
 document.getElementById('roomCode1').value=state.roomCode;
 document.getElementById('roomCode2').value=state.roomCode;
 document.getElementById('qsetName').value=state.qsetName||'';
