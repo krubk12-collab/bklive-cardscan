@@ -260,6 +260,7 @@
 /* ===================== ค่าคงที่ + ตัวแปร ===================== */
 const DICT='ARUCO_MIP_36h12', DET_WIDTH=720;
 const LIVE_WS='wss://bklive-cardscan-live.krubk12.workers.dev/?room=';
+const DEFAULT_GAS='https://script.google.com/macros/s/AKfycbwTID5HorZf1_V3llzh7fpcd_oW96XTQVAvBYPZ1byHu0wyZFTGL8CFA8B5lk9STfku/exec';
 const SIDES=['ก','ข','ค','ง'];   // บน, ขวา, ล่าง, ซ้าย (canonical)
 const LS='cardscan_v2';
 let detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
@@ -282,6 +283,7 @@ function load(){
   if(!state.questions || state.questions.length===0) loadDefaultQuestions();
   if(!state.roster) state.roster=[];
   if(!state.sessions) state.sessions={pre:{},post:{}};
+  if(!state.gasUrl) state.gasUrl=DEFAULT_GAS;   // ฝัง URL เริ่มต้น ใช้ได้ทันทีไม่ต้องวางเอง
 }
 
 /* ===================== คำถามตัวอย่าง (ชุดของครู) ===================== */
