@@ -27,6 +27,19 @@
   .muted{ color:#71788a; font-size:13px; }
   .tag{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12.5px; font-weight:700; }
   .tag.pre{ background:#e7f0ff; color:#2d6cdf;} .tag.post{ background:#eafaf2; color:#1aa363;}
+  .tag.on{ background:#eafaf2; color:#1aa363;} .tag.off{ background:#fde8ea; color:#e23b4e;}
+
+  /* จอใหญ่ (viewer) */
+  .big-count{ font-family:'Kanit'; font-size:22px; font-weight:700; color:var(--navy); text-align:center; margin-bottom:10px;}
+  .big-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px;}
+  .bstu{ border:3px solid #d4d9e6; border-radius:12px; padding:10px 6px; text-align:center; background:#fff;}
+  .bstu .bn{ font-size:14px; color:#5b6275; font-weight:600;}
+  .bstu .bnm{ font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bstu .bans{ font-family:'Kanit'; font-size:46px; font-weight:700; color:#cfd4e0; line-height:1.1;}
+  .bstu.answered{ border-color:var(--green); background:#eafaf2; transform:scale(1.0);}
+  .bstu.answered .bans{ color:var(--green);}
+  #liveQ .qt{ font-family:'Kanit'; font-size:22px; color:var(--navy); font-weight:700;}
+  #liveQ .ch{ font-size:17px; margin:3px 0;}
 
   /* questions */
   .q-item{ border:1.5px solid #e1e5ee; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
@@ -94,6 +107,7 @@
     <button id="t_test" class="active" onclick="showView('test')">📷 สอบ</button>
     <button id="t_q" onclick="showView('q')">📝 คำถาม</button>
     <button id="t_res" onclick="showView('res')">📊 ผลสอบ</button>
+    <button id="t_live" onclick="showView('live')">📺 จอใหญ่</button>
     <button id="t_gen" onclick="showView('gen')">🖨️ การ์ด</button>
     <button id="t_set" onclick="showView('set')">⚙️ ตั้งค่า</button>
   </div>
@@ -109,6 +123,9 @@
         <option value="post">📗 หลังเรียน (Post-test)</option>
       </select>
       <span id="modeTag"></span>
+      <label style="margin-left:auto;">📺 รหัสห้อง:</label>
+      <input id="roomCode1" style="width:90px;" onchange="setRoom(this.value)">
+      <span class="muted" id="liveSendStat">ส่งจอใหญ่: ปิด</span>
     </div>
     <div class="row">
       <button class="act green" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
@@ -165,6 +182,25 @@
   <div class="panel scroll" id="resTable"></div>
 </div>
 
+<!-- ============ LIVE VIEWER (จอใหญ่บนคอม) ============ -->
+<div id="liveView" class="view">
+  <div class="panel">
+    <div class="row">
+      <label>📺 รหัสห้อง (ให้ตรงกับมือถือ):</label>
+      <input id="roomCode2" style="width:110px;" onchange="setRoom(this.value)">
+      <button class="act sm" onclick="startViewer()">🔌 เชื่อมต่อ</button>
+      <span id="viewerStat" class="tag">ยังไม่เชื่อมต่อ</span>
+      <button class="act gray sm" onclick="toggleFull()" style="margin-left:auto;">⛶ เต็มจอ</button>
+    </div>
+    <p class="muted" style="margin-top:6px;">เปิดหน้านี้บนคอม/โปรเจกเตอร์ · มือถือไปแท็บ 📷 สอบ ตั้งรหัสห้องให้ตรงกัน · ผลจะขึ้นสดทันทีที่สแกน</p>
+  </div>
+  <div class="panel" id="liveQ"></div>
+  <div class="panel">
+    <div class="big-count" id="liveCount">รอข้อมูลจากมือถือ...</div>
+    <div class="big-grid" id="bigGrid"></div>
+  </div>
+</div>
+
 <!-- ============ GENERATOR ============ -->
 <div id="genView" class="view">
   <div class="panel no-print">
@@ -208,6 +244,7 @@
 <script>
 /* ===================== ค่าคงที่ + ตัวแปร ===================== */
 const DICT='ARUCO_MIP_36h12', DET_WIDTH=720;
+const LIVE_WS='wss://bklive-cardscan-live.krubk12.workers.dev/?room=';
 const SIDES=['ก','ข','ค','ง'];   // บน, ขวา, ล่าง, ซ้าย (canonical)
 const LS='cardscan_v2';
 let detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
@@ -216,7 +253,7 @@ let dict=new AR.Dictionary(DICT);
 let state={
   qsetName:'', questions:[], roster:[],
   sessions:{ pre:{}, post:{} },   // sessions[mode][studentId][qIndex] = 'ก'/'ข'/'ค'/'ง'
-  gasUrl:''
+  gasUrl:'', roomCode:'bk1'
 };
 let curMode='pre', curQ=0;
 
@@ -252,13 +289,14 @@ function loadDefaultQuestions(){
 
 /* ===================== แท็บ ===================== */
 function showView(v){
-  ['test','q','res','gen','set'].forEach(x=>{
+  ['test','q','res','live','gen','set'].forEach(x=>{
     document.getElementById(x+'View').classList.toggle('active', x===v);
     document.getElementById('t_'+x).classList.toggle('active', x===v);
   });
   if(v==='q') renderQEditor();
   if(v==='res') renderResults();
   if(v==='test'){ renderQShow(); renderLiveGrid(); }
+  if(v==='live') startViewer();
 }
 
 /* ===================== รายชื่อ ===================== */
@@ -318,6 +356,7 @@ async function startCam(){
   catch(e){ document.getElementById('scanStat').textContent='❌ เปิดกล้องไม่ได้: '+e.message+' (ต้องเปิดผ่าน https)'; return; }
   video.srcObject=stream; await video.play();
   document.getElementById('btnStart').style.display='none'; document.getElementById('btnStop').style.display='inline-block';
+  ensureScannerWS();
   running=true; loop();
 }
 function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; }
@@ -340,6 +379,7 @@ function loop(){
   });
   document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
   renderLiveGrid();
+  pushLive();
 }
 function answerFromCorners(c){
   if(!c||c.length!==4)return null;
@@ -368,8 +408,63 @@ function renderLiveGrid(){
   document.getElementById('qnum2').textContent=thaiNum(curQ+1);
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 }
-function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); }
+function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
 function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); renderLiveGrid(); save(); } }
+
+/* ===================== เรียลไทม์ จอใหญ่ (WebSocket) ===================== */
+let scannerWS=null, viewerWS=null, lastPush=0, lastPayload='';
+function setRoom(v){
+  v=(v||'').trim()||'bk1'; state.roomCode=v; save();
+  document.getElementById('roomCode1').value=v; document.getElementById('roomCode2').value=v;
+  if(scannerWS){ try{scannerWS.close();}catch(e){} scannerWS=null; }
+  if(viewerWS){ try{viewerWS.close();}catch(e){} viewerWS=null; if(document.getElementById('liveView').classList.contains('active')) startViewer(); }
+}
+function ensureScannerWS(){
+  if(scannerWS && scannerWS.readyState<=1) return;
+  try{
+    scannerWS=new WebSocket(LIVE_WS+encodeURIComponent(state.roomCode));
+    scannerWS.onopen=()=>{ document.getElementById('liveSendStat').textContent='ส่งจอใหญ่: ✅ ห้อง '+state.roomCode; };
+    scannerWS.onclose=()=>{ document.getElementById('liveSendStat').textContent='ส่งจอใหญ่: หลุด'; scannerWS=null; };
+    scannerWS.onerror=()=>{};
+  }catch(e){}
+}
+function buildLivePayload(){
+  const q=state.questions[curQ]||{}; const sess=ensureSess();
+  const students=state.roster.map(s=>({id:s.id,name:s.name||('เลขที่ '+s.id),ans:(sess[s.id]&&sess[s.id][curQ])||null}));
+  return JSON.stringify({mode:curMode,q:curQ,total:state.questions.length,qtext:q.text||'',choices:q.choices||[],students});
+}
+function pushLive(force){
+  ensureScannerWS();
+  if(!scannerWS||scannerWS.readyState!==1) return;
+  const now=performance.now(); if(!force && now-lastPush<700) return;
+  const payload=buildLivePayload(); if(!force && payload===lastPayload) return;
+  lastPush=now; lastPayload=payload; try{ scannerWS.send(payload); }catch(e){}
+}
+function startViewer(){
+  document.getElementById('roomCode2').value=state.roomCode;
+  if(viewerWS && viewerWS.readyState<=1){ return; }
+  setViewerStat('กำลังเชื่อมต่อ...','');
+  try{
+    viewerWS=new WebSocket(LIVE_WS+encodeURIComponent(state.roomCode));
+    viewerWS.onopen=()=>setViewerStat('✅ เชื่อมต่อแล้ว · ห้อง '+state.roomCode,'on');
+    viewerWS.onmessage=e=>renderBig(e.data);
+    viewerWS.onclose=()=>{ setViewerStat('หลุด—ต่อใหม่...','off'); viewerWS=null; setTimeout(()=>{ if(document.getElementById('liveView').classList.contains('active')) startViewer(); },2000); };
+    viewerWS.onerror=()=>{};
+  }catch(e){ setViewerStat('เชื่อมต่อไม่ได้','off'); }
+}
+function setViewerStat(t,c){ const e=document.getElementById('viewerStat'); e.textContent=t; e.className='tag '+(c||''); }
+function renderBig(data){
+  let d; try{ d=JSON.parse(data); }catch(e){ return; }
+  const modeTh=d.mode==='pre'?'ก่อนเรียน':'หลังเรียน';
+  let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{ ch+='<div class="ch"><b>'+L+'.</b> '+((d.choices&&d.choices[i])||'')+'</div>'; });
+  document.getElementById('liveQ').innerHTML='<div class="qt">['+modeTh+'] ข้อ '+thaiNum(d.q+1)+'/'+thaiNum(d.total)+' — '+(d.qtext||'')+'</div>'+ch;
+  let answered=0,html='';
+  (d.students||[]).forEach(s=>{ const a=s.ans; if(a)answered++;
+    html+='<div class="bstu'+(a?' answered':'')+'"><div class="bn">เลขที่ '+thaiNum(s.id)+'</div><div class="bnm">'+(s.name||'')+'</div><div class="bans">'+(a||'–')+'</div></div>'; });
+  document.getElementById('bigGrid').innerHTML=html;
+  document.getElementById('liveCount').textContent='ตอบแล้ว '+answered+'/'+(d.students||[]).length+' คน';
+}
+function toggleFull(){ const el=document.documentElement; if(!document.fullscreenElement){ el.requestFullscreen&&el.requestFullscreen(); } else { document.exitFullscreen&&document.exitFullscreen(); } }
 
 /* ===================== ผลสอบ ===================== */
 function scoreOf(mode,sid){
@@ -470,6 +565,9 @@ load();
 curMode=document.getElementById('modeSel').value;
 if(state.roster.length){ document.getElementById('roster').value=state.roster.filter(s=>s.name).map(s=>s.name).join('\n'); }
 if(state.gasUrl) document.getElementById('gasUrl').value=state.gasUrl;
+if(!state.roomCode) state.roomCode='bk1';
+document.getElementById('roomCode1').value=state.roomCode;
+document.getElementById('roomCode2').value=state.roomCode;
 document.getElementById('qsetName').value=state.qsetName||'';
 document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 renderModeTag(); renderQShow(); buildCards(); renderLiveGrid();
