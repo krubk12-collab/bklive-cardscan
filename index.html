@@ -134,6 +134,7 @@
       <button class="act sm" onclick="changeQ(-1)">◀ ก่อน</button>
       <button class="act sm" onclick="changeQ(1)">ถัดไป ▶</button>
       <button class="act red sm" onclick="clearQ()">ล้างข้อนี้</button>
+      <button class="act green" onclick="finishTest()">✅ จบ/บันทึกผล</button>
       <span class="muted" id="scanStat">ยังไม่เปิดกล้อง</span>
     </div>
   </div>
@@ -380,7 +381,9 @@ function loop(){
   document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
   renderLiveGrid();
   pushLive();
+  if(now-lastSave>2500){ lastSave=now; save(); }   // เซฟลงเครื่องถี่ๆ กันข้อมูลหายถ้าปิดแอปกลางคัน
 }
+let lastSave=0;
 function answerFromCorners(c){
   if(!c||c.length!==4)return null;
   const m=[{L:'ก',y:(c[0].y+c[1].y)/2},{L:'ข',y:(c[1].y+c[2].y)/2},{L:'ค',y:(c[2].y+c[3].y)/2},{L:'ง',y:(c[3].y+c[0].y)/2}];
@@ -409,6 +412,23 @@ function renderLiveGrid(){
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 }
 function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
+async function finishTest(){
+  save();
+  const modeTh = curMode==='pre'?'ก่อนเรียน':'หลังเรียน';
+  // นับว่ามีนักเรียนตอบกี่คนในโหมดนี้
+  let answeredStudents=0; const sess=state.sessions[curMode];
+  state.roster.forEach(s=>{ if(sess[s.id] && Object.keys(sess[s.id]).length>0) answeredStudents++; });
+  if(answeredStudents===0){ alert('ยังไม่มีคำตอบในโหมด "'+modeTh+'" เลยครับ ลองสแกนก่อน'); return; }
+  if(state.gasUrl){
+    if(confirm('จบการสอบ "'+modeTh+'" ('+answeredStudents+' คน)\n\nส่งผลเข้า Google Sheets เลยไหม?')){
+      showView('res');
+      await sendToSheets(curMode);
+    } else { showView('res'); }
+  } else {
+    alert('✅ บันทึกผล "'+modeTh+'" ในเครื่องแล้ว ('+answeredStudents+' คน)\n\nไปที่แท็บ 📊 ผลสอบ เพื่อดูคะแนน/พัฒนาการ และดาวน์โหลด Excel ได้เลย\n\n(ถ้าต้องการส่งเข้า Google Sheets อัตโนมัติ ให้ตั้งค่า URL ที่แท็บ ⚙️ ก่อน)');
+    showView('res');
+  }
+}
 function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); renderLiveGrid(); save(); } }
 
 /* ===================== เรียลไทม์ จอใหญ่ (WebSocket) ===================== */
@@ -523,13 +543,14 @@ async function testSheets(){
   await gasGet({action:'ping'});
   document.getElementById('setStat').textContent='📤 ส่งคำขอทดสอบแล้ว — เช็คในชีตว่ามีแถว ping เข้ามาไหม (ถ้ามี = เชื่อมได้)';
 }
-async function sendToSheets(){
+async function sendToSheets(onlyMode){
   if(!state.gasUrl){ document.getElementById('resStat').textContent='⚠️ ไปตั้งค่า URL ที่แท็บ ⚙️ ก่อน'; showView('set'); return; }
   const total=state.questions.length, date=new Date().toLocaleDateString('th-TH');
-  document.getElementById('resStat').textContent='⏳ กำลังส่ง...';
+  const modes = onlyMode ? [onlyMode] : ['pre','post'];
+  document.getElementById('resStat').textContent='⏳ กำลังส่ง'+(onlyMode?(' ('+(onlyMode==='pre'?'ก่อนเรียน':'หลังเรียน')+')'):'')+'...';
   let sent=0;
   for(const s of state.roster){
-    for(const mode of ['pre','post']){
+    for(const mode of modes){
       const sess=state.sessions[mode]; if(!sess[s.id])continue;
       const sc=scoreOf(mode,s.id); if(sc.answered===0)continue;
       const answers=state.questions.map((q,qi)=>sess[s.id][qi]||'-').join('');
@@ -537,7 +558,7 @@ async function sendToSheets(){
       sent++;
     }
   }
-  document.getElementById('resStat').textContent='✅ ส่งแล้ว '+sent+' รายการ — เช็คใน Google Sheets';
+  document.getElementById('resStat').textContent='✅ ส่งเข้า Google Sheets แล้ว '+sent+' รายการ — เปิดชีตเช็คได้เลย';
 }
 
 /* ===================== generator ===================== */
