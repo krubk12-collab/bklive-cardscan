@@ -41,6 +41,13 @@
   #liveQ .qt{ font-family:'Kanit'; font-size:22px; color:var(--navy); font-weight:700;}
   #liveQ .ch{ font-size:17px; margin:3px 0;}
 
+  /* gate เลือกครูก่อนเริ่ม */
+  #gate{ position:fixed; inset:0; background:linear-gradient(135deg,#1b2540,#2d3a63); z-index:2000; display:none; align-items:center; justify-content:center; padding:16px;}
+  #gate .box{ background:#fff; border-radius:18px; padding:26px 24px; max-width:460px; width:100%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.4);}
+  #gate h2{ font-size:20px; margin:0 0 4px;}
+  #gate select{ width:100%; font-size:17px; padding:11px; margin-top:8px;}
+  #teacherBadge{ cursor:pointer; background:rgba(255,255,255,.16); padding:5px 11px; border-radius:8px; font-size:13px; font-weight:600;}
+
   /* questions */
   .q-item{ border:1.5px solid #e1e5ee; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
   .q-item .qhead{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
@@ -100,9 +107,20 @@
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="box">
+    <h2>🃏 ระบบทดสอบด้วยการ์ด</h2>
+    <p class="muted">เลือกชื่อครูผู้สอนก่อนเริ่มใช้งาน<br>(กันข้อมูลปนกันเมื่อครูใช้พร้อมกันหลายคน)</p>
+    <select id="gateTeacher"><option>กำลังโหลดรายชื่อครู...</option></select>
+    <div style="margin-top:16px;">
+      <button class="act green" onclick="confirmTeacher()" style="font-size:16px; padding:12px 26px;">▶️ เริ่มใช้งาน</button>
+    </div>
+    <p class="muted" id="gateStat" style="margin-top:10px;"></p>
+  </div>
+</div>
 <header>
   <h1>🃏 ระบบทดสอบด้วยการ์ด</h1>
-  <span class="muted" style="color:#bcc6e0;">ก่อนเรียน–หลังเรียน</span>
+  <span id="teacherBadge" onclick="showGate()" title="คลิกเพื่อเปลี่ยนครู">👩‍🏫 —</span>
   <div class="tabs">
     <button id="t_test" class="active" onclick="showView('test')">📷 สอบ</button>
     <button id="t_q" onclick="showView('q')">📝 คำถาม</button>
@@ -284,6 +302,7 @@ function load(){
   if(!state.roster) state.roster=[];
   if(!state.sessions) state.sessions={pre:{},post:{}};
   if(!state.gasUrl) state.gasUrl=DEFAULT_GAS;   // ฝัง URL เริ่มต้น ใช้ได้ทันทีไม่ต้องวางเอง
+  if(!state.teacherName) state.teacherName='ครู ณัฏฐจิรา ทองงาม';  // เจ้าของข้อมูลตัวอย่าง (ครูภาษาไทย)
 }
 
 /* ===================== คำถามตัวอย่าง (ชุดของครู) ===================== */
@@ -366,7 +385,41 @@ async function loadTeachers(){
     document.getElementById('teacherStat').textContent='โหลด '+t.length+' คน';
   }catch(e){ sel.innerHTML='<option>โหลดไม่ได้ ('+e+')</option>'; }
 }
-function setTeacher(v){ state.teacherName=(v||'').replace(/ \(.*\)$/,''); save(); }
+function setTeacher(v){ state.teacherName=(v||'').replace(/ \(.*\)$/,''); applyTeacher(); save(); }
+
+/* ===================== เลือกครูก่อนเริ่ม (gate) + ห้อง live แยกตามครู ===================== */
+function roomHash(s){ let h=0; for(let i=0;i<(s||'').length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return 'bk_'+h.toString(36); }
+function applyTeacher(){
+  // ตั้งห้อง live ตามครู (มือถือ+คอมเลือกครูเดียวกัน = ห้องเดียวกันอัตโนมัติ)
+  state.roomCode=roomHash(state.teacherName);
+  const b=document.getElementById('teacherBadge'); if(b) b.textContent='👩‍🏫 '+(state.teacherName||'—');
+  const r1=document.getElementById('roomCode1'), r2=document.getElementById('roomCode2');
+  if(r1) r1.value=state.roomCode; if(r2) r2.value=state.roomCode;
+}
+async function showGate(){
+  document.getElementById('gate').style.display='flex';
+  const sel=document.getElementById('gateTeacher');
+  sel.innerHTML='<option>กำลังโหลดรายชื่อครู...</option>';
+  document.getElementById('gateStat').textContent='';
+  try{
+    const t=await jsonp({action:'teachers'});
+    sel.innerHTML=t.map(x=>'<option'+(x.name===state.teacherName?' selected':'')+'>'+x.name+(x.position?(' ('+x.position+')'):'')+'</option>').join('');
+    if(state.teacherName){ const opt=[...sel.options].find(o=>o.value.replace(/ \(.*\)$/,'')===state.teacherName); if(opt) sel.value=opt.value; }
+  }catch(e){
+    const def=state.teacherName||'ครู ณัฏฐจิรา ทองงาม';
+    sel.innerHTML='<option>'+def+'</option>';
+    document.getElementById('gateStat').textContent='โหลดรายชื่อครูไม่ได้ ใช้ค่าเดิมไปก่อน (เช็คเน็ต/URL)';
+  }
+}
+function confirmTeacher(){
+  const v=document.getElementById('gateTeacher').value;
+  if(!v || v.indexOf('กำลังโหลด')===0){ alert('กรุณาเลือกชื่อครูก่อน'); return; }
+  state.teacherName=v.replace(/ \(.*\)$/,'');
+  applyTeacher(); save();
+  // sync ช่องเลือกครูในแท็บตั้งค่า
+  const ts=document.getElementById('teacherSel'); if(ts && [...ts.options].some(o=>o.value===v)) ts.value=v;
+  document.getElementById('gate').style.display='none';
+}
 
 /* ===================== คำถาม: ตัวแก้ไข ===================== */
 function renderQEditor(){
@@ -655,7 +708,9 @@ document.getElementById('roomCode1').value=state.roomCode;
 document.getElementById('roomCode2').value=state.roomCode;
 document.getElementById('qsetName').value=state.qsetName||'';
 document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
+applyTeacher();
 renderModeTag(); renderQShow(); buildCards(); renderLiveGrid();
+showGate();   // เลือกครูก่อนเริ่มทุกครั้ง (เลือกค้างไว้ให้ กดเริ่มได้เลย)
 </script>
 </body>
 </html>
