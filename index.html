@@ -84,7 +84,14 @@
   .scroll{ overflow:auto; max-height:70vh; }
 
   /* generator */
-  .gen-cards{ display:grid; grid-template-columns:repeat(2,1fr); gap:10mm;}
+  .gen-cards{ display:grid; gap:8mm; justify-items:center;}
+  .gen-cards.pp4{ grid-template-columns:repeat(2,1fr);} .gen-cards.pp4 .pcard{ width:92mm;}
+  .gen-cards.pp2{ grid-template-columns:1fr;} .gen-cards.pp2 .pcard{ width:120mm;}
+  .gen-cards.pp1{ grid-template-columns:1fr;} .gen-cards.pp1 .pcard{ width:185mm;}
+  .gen-cards.pp4 .side{font-size:26px;} .gen-cards.pp4 .corner{font-size:18px;}
+  .gen-cards.pp2 .side{font-size:42px;} .gen-cards.pp2 .corner{font-size:28px;}
+  .gen-cards.pp1 .side{font-size:64px;} .gen-cards.pp1 .corner{font-size:42px;}
+  .gen-cards.pp2 .stu-name, .gen-cards.pp1 .stu-name{font-size:15px;}
   .pcard{ border:1.5px dashed #bbb; border-radius:8px; padding:8mm 6mm; text-align:center; position:relative; aspect-ratio:1/1.15; display:flex; flex-direction:column;}
   .pcard .corner{ position:absolute; font-family:'Kanit'; font-weight:700; font-size:20px; color:#333;}
   .pcard .c-tl{top:4mm;left:5mm;} .pcard .c-tr{top:4mm;right:5mm;}
@@ -312,11 +319,18 @@
     <textarea id="roster" rows="5" style="width:100%;" placeholder="เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..." oninput="rosterChanged()"></textarea>
     <div class="row" style="margin-top:8px;">
       <label>จำนวน (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
+      <label>ขนาด:
+        <select id="cardPerPage" onchange="setCardLayout(this.value)">
+          <option value="4">4 ใบ/แผ่น A4 (เล็ก)</option>
+          <option value="2">2 ใบ/แผ่น A4 (กลาง)</option>
+          <option value="1">1 ใบ/แผ่น A4 (ใหญ่สุด)</option>
+        </select>
+      </label>
       <button class="act sm" onclick="buildCards()">สร้างการ์ด</button>
       <button class="act green sm" onclick="printView('gen')">🖨️ พิมพ์ / PDF</button>
     </div>
   </div>
-  <div class="gen-cards" id="genCards"></div>
+  <div class="gen-cards pp4" id="genCards"></div>
 </div>
 
 <!-- ============ SETTINGS ============ -->
@@ -389,13 +403,14 @@ function selectSet(id){
   curQ=0;
 }
 function save(){
-  localStorage.setItem(LS, JSON.stringify({teacherName:state.teacherName, gasUrl:state.gasUrl, roomCode:state.roomCode}));
+  localStorage.setItem(LS, JSON.stringify({teacherName:state.teacherName, gasUrl:state.gasUrl, roomCode:state.roomCode, cardPerPage:state.cardPerPage}));
   const s=curSet(); if(s){ s.name=state.qsetName; }   // sync ชื่อชุด (questions/sessions เป็น ref เดียวกันอยู่แล้ว)
   if(state.teacherName) localStorage.setItem(tkey(), JSON.stringify({roster:state.roster, currentSetId:state.currentSetId, sets:state.sets}));
 }
 function load(){
   const raw=localStorage.getItem(LS);
-  if(raw){ try{ const s=JSON.parse(raw); state.teacherName=s.teacherName||''; state.gasUrl=s.gasUrl||''; state.roomCode=s.roomCode||''; }catch(e){} }
+  if(raw){ try{ const s=JSON.parse(raw); state.teacherName=s.teacherName||''; state.gasUrl=s.gasUrl||''; state.roomCode=s.roomCode||''; state.cardPerPage=s.cardPerPage||'4'; }catch(e){} }
+  if(!state.cardPerPage) state.cardPerPage='4';
   if(!state.gasUrl) state.gasUrl=DEFAULT_GAS;   // ฝัง URL เริ่มต้น ใช้ได้ทันทีไม่ต้องวางเอง
   if(!state.teacherName) state.teacherName='ครู ณัฏฐจิรา ทองงาม';  // เจ้าของข้อมูลตัวอย่าง (ครูภาษาไทย)
   loadBundle();
@@ -860,9 +875,17 @@ async function sendToSheets(onlyMode){
 }
 
 /* ===================== generator ===================== */
+function setCardLayout(n){ state.cardPerPage=String(n||'4'); save(); applyCardLayout(); }
+function applyCardLayout(){
+  const wrap=document.getElementById('genCards'); if(!wrap) return;
+  const n=state.cardPerPage||'4';
+  wrap.classList.remove('pp1','pp2','pp4'); wrap.classList.add('pp'+n);
+  const sel=document.getElementById('cardPerPage'); if(sel) sel.value=n;
+}
 function buildCards(){
   if(!state.roster || !state.roster.length) state.roster=getRosterFromInput();
   save();
+  applyCardLayout();
   const wrap=document.getElementById('genCards'); wrap.innerHTML='';
   state.roster.forEach(stu=>{
     const svg=dict.generateSVG(stu.id), num=thaiNum(stu.id);
