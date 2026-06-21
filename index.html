@@ -124,12 +124,23 @@
   .omr-res-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
   .omr-qa{border:1.5px solid #d4d9e6;border-radius:7px;padding:3px 8px;font-weight:700;font-family:'Kanit';font-size:13px;}
   .omr-qa.ok{border-color:#1aa363;background:#eafaf2;} .omr-qa.wrong{border-color:#e23b4e;background:#fde8ea;} .omr-qa.blank{border-color:#e2a23b;background:#fff6e6;color:#b07700;}
+
+  /* แบนเนอร์ฮีโร่ (สไตล์นักสืบ) */
+  .gate-banner{ width:100%; border-radius:14px; display:block; margin-bottom:16px; box-shadow:0 6px 18px rgba(0,0,0,.25);}
+  .hero{ position:relative; max-width:1100px; margin:14px auto 0; padding:0 14px;}
+  .hero-inner{ position:relative; border-radius:16px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,.18); aspect-ratio:1037/575;}
+  .hero-inner img{ width:100%; height:100%; object-fit:cover; display:block;}
+  .hero-cap{ position:absolute; right:4%; top:0; height:100%; width:52%; display:flex; flex-direction:column; justify-content:center; align-items:flex-end; text-align:right; padding:0 4% 0 0; color:#fff;}
+  .hero-cap .ht{ font-family:'Kanit'; font-weight:700; font-size:clamp(15px,3.3vw,30px); line-height:1.15; text-shadow:0 2px 8px rgba(0,0,0,.8); margin:0;}
+  .hero-cap .hs{ font-family:'Kanit'; font-weight:600; font-size:clamp(11px,2vw,17px); margin-top:8px; color:#7fe3b0; text-shadow:0 2px 8px rgba(0,0,0,.85);}
+  .hero-cap .hb{ font-family:'Sarabun'; font-size:clamp(10px,1.6vw,14px); margin-top:6px; color:#dfe6f5; text-shadow:0 2px 8px rgba(0,0,0,.85);}
 </style>
 </head>
 <body>
 <div id="gate">
   <div class="box">
-    <h2>🃏 ระบบทดสอบด้วยการ์ด</h2>
+    <img src="assets/banner.png" class="gate-banner" alt="ระบบตรวจคำตอบด้วยการ์ดสแกน">
+    <h2>🔎 ระบบตรวจคำตอบด้วยการ์ดสแกน</h2>
     <p class="muted">เลือกชื่อครูผู้สอนก่อนเริ่มใช้งาน<br>(กันข้อมูลปนกันเมื่อครูใช้พร้อมกันหลายคน)</p>
     <select id="gateTeacher"><option>กำลังโหลดรายชื่อครู...</option></select>
     <div style="margin-top:16px;">
@@ -154,6 +165,16 @@
 
 <!-- ============ TEST / SCAN ============ -->
 <div id="testView" class="view active">
+  <div class="hero">
+    <div class="hero-inner">
+      <img src="assets/banner.png" alt="ระบบตรวจคำตอบด้วยการ์ดสแกน">
+      <div class="hero-cap">
+        <p class="ht">ระบบตรวจคำตอบ<br>ด้วยการ์ดสแกน</p>
+        <p class="hs" id="heroTeacher">โดย ครูณัฏฐจิรา ทองงาม</p>
+        <p class="hb">สืบเสาะแสวงหาความรู้ด้วยเทคโนโลยี 🔍</p>
+      </div>
+    </div>
+  </div>
   <div class="panel">
     <div class="row" style="margin-bottom:8px;">
       <label>โหมด:</label>
@@ -478,6 +499,7 @@ function applyTeacher(){
   // ตั้งห้อง live ตามครู (มือถือ+คอมเลือกครูเดียวกัน = ห้องเดียวกันอัตโนมัติ)
   state.roomCode=roomHash(state.teacherName);
   const b=document.getElementById('teacherBadge'); if(b) b.textContent='👩‍🏫 '+(state.teacherName||'—');
+  const ht=document.getElementById('heroTeacher'); if(ht) ht.textContent='โดย '+(state.teacherName||'ครูณัฏฐจิรา ทองงาม');
   const r1=document.getElementById('roomCode1'), r2=document.getElementById('roomCode2');
   if(r1) r1.value=state.roomCode; if(r2) r2.value=state.roomCode;
 }
