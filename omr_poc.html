@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>OMR POC — ตรวจกระดาษคำตอบด้วยกล้อง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;} body{margin:0;font-family:'Sarabun';background:#f4f6fb;color:#1c2230;}
+  header{background:#1b2540;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  header h1{font-family:'Kanit';font-size:17px;margin:0;}
+  .tabs{margin-left:auto;display:flex;gap:6px;}
+  .tabs button{background:rgba(255,255,255,.13);color:#fff;border:none;padding:8px 13px;border-radius:8px;font-family:'Sarabun';font-weight:600;cursor:pointer;}
+  .tabs button.active{background:#f5a623;color:#1b2540;}
+  .view{display:none;padding:14px;max-width:1000px;margin:0 auto;} .view.active{display:block;}
+  .panel{background:#fff;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:12px;}
+  button.act{background:#2d6cdf;color:#fff;border:none;padding:9px 15px;border-radius:8px;font-weight:700;cursor:pointer;font-family:'Sarabun';}
+  button.act.green{background:#1aa363;} input,select{font-family:'Sarabun';padding:7px;border:1.5px solid #cdd3e0;border-radius:7px;}
+  #camWrap{position:relative;width:100%;background:#000;border-radius:12px;overflow:hidden;}
+  #video{width:100%;display:block;} #overlay{position:absolute;inset:0;width:100%;height:100%;}
+  .res-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .qa{border:1.5px solid #d4d9e6;border-radius:8px;padding:4px 9px;font-weight:700;font-family:'Kanit';}
+  .qa.ok{border-color:#1aa363;background:#eafaf2;} .qa.blank{border-color:#e23b4e;background:#fde8ea;color:#e23b4e;}
+
+  /* sheet (canonical 1000x1414 → scale) */
+  #sheetScale{width:210mm;}
+  #sheet{position:relative;width:1000px;height:1414px;background:#fff;transform-origin:top left;}
+  #sheet .mk{position:absolute;} #sheet .mk svg{width:100%;height:100%;display:block;}
+  #sheet .bub{position:absolute;border:3px solid #111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Kanit';font-weight:700;}
+  #sheet .qlab{position:absolute;font-family:'Kanit';font-weight:700;font-size:26px;}
+  #sheet .nm{position:absolute;font-family:'Kanit';}
+  @media print{ header,.no-print{display:none!important;} .view{padding:0;max-width:none;} #genView{display:block!important;}
+    #sheetScale{width:auto;} #sheet{transform:none;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧾 OMR POC — ตรวจกระดาษคำตอบ</h1>
+  <span style="font-size:12px;opacity:.8;">10 ข้อ · 4 มุม ArUco + homography</span>
+  <div class="tabs">
+    <button id="t_scan" class="active" onclick="show('scan')">📷 สแกน</button>
+    <button id="t_gen" onclick="show('gen')">🖨️ สร้างกระดาษ</button>
+  </div>
+</header>
+
+<div id="scanView" class="view active">
+  <div class="panel no-print">
+    <button class="act green" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
+    <button class="act" onclick="stopCam()">⏸️ หยุด</button>
+    <span id="stat" style="margin-left:8px;color:#555;"></span>
+  </div>
+  <div class="panel"><div id="camWrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div></div>
+  <div class="panel">
+    <h3 style="font-family:Kanit;margin:.2em 0;">ผลอ่านล่าสุด</h3>
+    <div id="readOut" style="color:#555;">จ่อกล้องให้เห็นกระดาษทั้งแผ่น (เห็นครบ 4 มุม)</div>
+  </div>
+</div>
+
+<div id="genView" class="view">
+  <div class="panel no-print">
+    <label>เลขที่นักเรียน (รหัสมาร์กเกอร์): </label><input type="number" id="sid" value="1" min="1" max="240" style="width:80px;">
+    <label> ชื่อ: </label><input id="sname" value="เด็กชายทดสอบ ระบบ" style="width:200px;">
+    <button class="act" onclick="renderSheet()">สร้าง</button>
+    <button class="act green" onclick="window.print()">🖨️ พิมพ์</button>
+    <span style="color:#555;margin-left:8px;">ฝนคำตอบด้วยดินสอ/ปากกาให้เต็มวง</span>
+  </div>
+  <div id="sheetScale"><div id="sheet"></div></div>
+</div>
+
+<canvas id="work" style="display:none;"></canvas>
+<script src="lib/cv.js"></script>
+<script src="lib/aruco.js"></script>
+<script src="omr_lib.js"></script>
+<script>
+const DICT='ARUCO_MIP_36h12';
+const detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
+const dict=new AR.Dictionary(DICT);
+const CORNER_IDS={246:'tl',247:'tr',248:'br',249:'bl'};
+let NQ=10, tpl=OMR.template(NQ);
+const CHO=['ก','ข','ค','ง'];
+
+function show(v){ ['scan','gen'].forEach(x=>{document.getElementById(x+'View').classList.toggle('active',x===v);document.getElementById('t_'+x).classList.toggle('active',x===v);}); if(v==='gen') renderSheet(); }
+
+/* ---------- สร้างกระดาษ (พิมพ์) ---------- */
+function renderSheet(){
+  const sid=parseInt(document.getElementById('sid').value)||1;
+  const name=document.getElementById('sname').value||'';
+  const sh=document.getElementById('sheet'); sh.innerHTML='';
+  // scale ให้พอดี A4 บนจอ
+  const scale=Math.min((window.innerWidth-40)/1000, 1); document.getElementById('sheet').style.transform='scale('+Math.min(scale,0.75)+')';
+  document.getElementById('sheetScale').style.height=(1414*Math.min(scale,0.75)+20)+'px';
+  const m=tpl.markerSize;
+  function place(id,cx,cy,size){ const d=document.createElement('div'); d.className='mk'; d.style.left=(cx-size/2)+'px'; d.style.top=(cy-size/2)+'px'; d.style.width=size+'px'; d.style.height=size+'px'; d.innerHTML=dict.generateSVG(id); sh.appendChild(d); }
+  for(const k in tpl.corners){ const c=tpl.corners[k]; place(c.id,c.cx,c.cy,m); }
+  place(sid, tpl.student.cx, tpl.student.cy, tpl.student.size);
+  // ชื่อ
+  const nm=document.createElement('div'); nm.className='nm'; nm.style.left='200px'; nm.style.top='210px'; nm.style.fontSize='26px'; nm.textContent='เลขที่ '+sid+'  '+name; sh.appendChild(nm);
+  const hd=document.createElement('div'); hd.className='nm'; hd.style.left='200px'; hd.style.top='250px'; hd.style.fontSize='18px'; hd.style.color='#666'; hd.textContent='ฝนคำตอบให้เต็มวง · ก ข ค ง'; sh.appendChild(hd);
+  // วงฝน + เลขข้อ
+  tpl.rows.forEach((row,qi)=>{
+    const lx = row.col===0 ? (OMR.colX(tpl,0,0)-70) : (OMR.colX(tpl,1,0)-70);
+    const lab=document.createElement('div'); lab.className='qlab'; lab.style.left=lx+'px'; lab.style.top=(row.y-20)+'px'; lab.textContent=(qi+1)+'.'; sh.appendChild(lab);
+    for(let c=0;c<4;c++){
+      const x=OMR.colX(tpl,row.col,c), r=tpl.r;
+      const b=document.createElement('div'); b.className='bub'; b.style.left=(x-r)+'px'; b.style.top=(row.y-r)+'px'; b.style.width=(2*r)+'px'; b.style.height=(2*r)+'px'; b.style.fontSize='22px'; b.style.color='#999'; b.textContent=CHO[c]; sh.appendChild(b);
+    }
+  });
+}
+
+/* ---------- สแกน ---------- */
+const video=document.getElementById('video'),overlay=document.getElementById('overlay'),octx=overlay.getContext('2d');
+const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
+let stream=null,running=false,lastT=0;
+async function startCam(){
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:1280}},audio:false}); }
+  catch(e){ document.getElementById('stat').textContent='เปิดกล้องไม่ได้: '+e.message; return; }
+  video.srcObject=stream; await video.play(); running=true; loop();
+}
+function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); }
+function loop(){ if(!running)return; requestAnimationFrame(loop); const now=performance.now(); if(now-lastT<120)return; lastT=now; if(!video.videoWidth)return;
+  const dw=900,dh=Math.round(900*video.videoHeight/video.videoWidth);
+  if(work.width!==dw){work.width=dw;work.height=dh;overlay.width=dw;overlay.height=dh;}
+  wctx.drawImage(video,0,0,dw,dh);
+  const img=wctx.getImageData(0,0,dw,dh);
+  const out=readSheet(img);
+  octx.clearRect(0,0,dw,dh);
+  if(out.ok){ drawOverlay(out); showResult(out); document.getElementById('stat').textContent='อ่านได้! เลขที่ '+out.studentId; }
+  else document.getElementById('stat').textContent=out.msg||('เห็นมุม '+out.cornersFound+'/4');
+}
+// อ่านกระดาษจาก ImageData
+function readSheet(img){
+  let markers=[]; try{ markers=detector.detect(img); }catch(e){ return {ok:false,msg:'err'}; }
+  const found={}; let student=null;
+  markers.forEach(mk=>{ const c=center(mk.corners); if(CORNER_IDS[mk.id]) found[CORNER_IDS[mk.id]]=c; else if(mk.id>=1&&mk.id<=240) student={id:mk.id,c}; });
+  const cf=['tl','tr','br','bl'].filter(k=>found[k]).length;
+  if(cf<4) return {ok:false,cornersFound:cf};
+  const src=['tl','tr','br','bl'].map(k=>({x:tpl.corners[k].cx,y:tpl.corners[k].cy}));
+  const dst=['tl','tr','br','bl'].map(k=>found[k]);
+  const h=OMR.computeH(src,dst); if(!h) return {ok:false,msg:'homography fail'};
+  // white reference (จุดว่างซ้ายของแต่ละแถว)
+  const whites=[]; tpl.rows.forEach(row=>{ const p=OMR.applyH(h,tpl.whiteX,row.y); whites.push(sampleMean(img,p.x,p.y,8)); });
+  const white=median(whites)||220;
+  const answers=[]; const debug=[];
+  tpl.rows.forEach((row,qi)=>{
+    const fills=[];
+    for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c); const p=OMR.applyH(h,x,row.y);
+      // รัศมีในภาพ ~ map ระยะ r
+      const pr=OMR.applyH(h,x+tpl.r,row.y); const rImg=Math.max(4,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8);
+      const mean=sampleMean(img,p.x,p.y,rImg); fills.push((white-mean)/white); }
+    // ตัดสิน
+    let best=0; for(let c=1;c<4;c++) if(fills[c]>fills[best]) best=c;
+    let second=-1; for(let c=0;c<4;c++) if(c!==best && (second<0||fills[c]>fills[second])) second=c;
+    const fb=fills[best], fs=fills[second];
+    let ans='', flag='';
+    if(fb<0.28){ ans=''; flag='blank'; }
+    else if(fb-fs<0.12){ ans=CHO[best]; flag='double'; }   // ใกล้กัน = อาจฝน2/ไม่ชัด
+    else ans=CHO[best];
+    answers.push(ans); debug.push({fills,flag});
+  });
+  return {ok:true, h, studentId:student?student.id:null, studentC:student?student.c:null, answers, debug, found};
+}
+function center(c){ return {x:(c[0].x+c[1].x+c[2].x+c[3].x)/4, y:(c[0].y+c[1].y+c[2].y+c[3].y)/4}; }
+function sampleMean(img,cx,cy,r){ const d=img.data,W=img.width,H=img.height; let s=0,n=0; const r2=r*r;
+  for(let y=Math.max(0,cy-r|0);y<=Math.min(H-1,cy+r);y++) for(let x=Math.max(0,cx-r|0);x<=Math.min(W-1,cx+r);x++){
+    const dx=x-cx,dy=y-cy; if(dx*dx+dy*dy>r2) continue; const i=(y*W+x)*4; s+=(d[i]+d[i+1]+d[i+2])/3; n++; }
+  return n? s/n : 255;
+}
+function median(a){ if(!a.length)return 0; const b=a.slice().sort((x,y)=>x-y); return b[b.length>>1]; }
+function drawOverlay(out){
+  // มุม
+  octx.strokeStyle='#1aa363'; octx.lineWidth=2;
+  ['tl','tr','br','bl'].forEach(k=>{ const c=out.found[k]; octx.beginPath(); octx.arc(c.x,c.y,8,0,7); octx.stroke(); });
+  // วงคำตอบ
+  tpl.rows.forEach((row,qi)=>{ for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c); const p=OMR.applyH(out.h,x,row.y);
+    const picked=out.answers[qi]===CHO[c]; octx.beginPath(); octx.arc(p.x,p.y,6,0,7); octx.strokeStyle=picked?'#e23b4e':'rgba(45,108,223,.5)'; octx.lineWidth=picked?3:1; octx.stroke(); } });
+}
+function showResult(out){
+  let html='<b>เลขที่ '+(out.studentId||'?')+'</b> &nbsp; <div class="res-row">';
+  out.answers.forEach((a,i)=>{ const fl=out.debug[i].flag; const cls=a?(fl==='double'?'qa':'qa ok'):'qa blank'; html+='<span class="'+cls+'">'+(i+1)+'.'+(a||'–')+(fl==='double'?'?':'')+'</span>'; });
+  html+='</div>';
+  document.getElementById('readOut').innerHTML=html;
+}
+window.OMR_TPL=()=>tpl; window.OMR_READ=readSheet; window.OMR_DICT=dict;
+renderSheet();
+</script>
+</body>
+</html>
