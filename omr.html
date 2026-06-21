@@ -42,6 +42,13 @@
 </head>
 <body>
 <div class="gate" id="gate"><div class="box">
+  <div style="position:relative;border-radius:14px;overflow:hidden;margin-bottom:14px;box-shadow:0 6px 18px rgba(0,0,0,.2);">
+    <img src="assets/banner_omr.png" alt="ระบบวัดและประเมินผล" style="width:100%;display:block;">
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 6%;">
+      <div style="font-family:'Kanit',sans-serif;font-weight:700;color:#0d5c3b;font-size:clamp(13px,3.6vw,23px);line-height:1.2;text-shadow:0 1px 4px rgba(255,255,255,.9);">โรงเรียนชุมชนวัดบางโค<br>(แม่นางวิทย์อุปการี)</div>
+      <div style="font-family:'Kanit',sans-serif;font-weight:600;color:#13794f;font-size:clamp(10px,2.4vw,15px);margin-top:7px;text-shadow:0 1px 4px rgba(255,255,255,.9);">ระบบตรวจกระดาษคำตอบ เพื่อการวัดและประเมินผล</div>
+    </div>
+  </div>
   <h2 style="font-size:20px;">🧾 ตรวจกระดาษคำตอบ OMR</h2>
   <p class="muted">เลือกชื่อครูผู้สอนก่อนเริ่ม (กันข้อมูลปนกัน)</p>
   <select id="gateTeacher"><option>กำลังโหลด...</option></select>
@@ -72,6 +79,7 @@
       <button class="act" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
       <button class="act gray" onclick="stopCam()">⏸️ หยุด</button>
       <label><input type="checkbox" id="beepChk" checked> 🔊 บี๊บ</label>
+      <label><input type="checkbox" id="upChk" checked onchange="localStorage.setItem('omr_up',this.checked?'1':'0')"> ☁️ อัปภาพขึ้น Drive</label>
       <span class="muted" id="stat">—</span>
     </div>
     <p class="muted">จ่อกระดาษให้เห็นครบ 4 มุม → ระบบจับ+เก็บภาพ+บันทึกเป็นแถวอัตโนมัติ · เอากระดาษออกแล้วสแกนใบต่อไป</p>
@@ -233,12 +241,30 @@ function gradeOf(answers){ const key=document.getElementById('scKey').value.repl
 function capture(out,img){
   const imgData=warpImage(img,out.h);
   const g=gradeOf(out.answers);
-  const row={ id:Date.now()+'_'+Math.floor(Math.random()*1000), time:new Date().toLocaleString('th-TH'), teacher, studentId:out.studentId, name:'', answers:out.answers.slice(), score:g?g.score:'', total:g?g.total:'', img:imgData };
+  const row={ id:Date.now()+'_'+Math.floor(Math.random()*1000), time:new Date().toLocaleString('th-TH'), teacher, studentId:out.studentId, name:'', answers:out.answers.slice(), score:g?g.score:'', total:g?g.total:'', img:imgData, drive:'', cloud:'' };
   rows.unshift(row); dbPut(row);
   beep(990,140);
   let html='<b>✅ เก็บแล้ว</b> '+(out.studentId!=null?('เลขที่ '+out.studentId):'(เขียนชื่อเอง)')+(g?(' · คะแนน '+g.score+'/'+g.total):'')+'<div class="ansmini" style="margin-top:4px;">';
-  out.answers.forEach((a,i)=>html+=(i+1)+a+(a?'':'-')+' '); html+='</div>';
+  out.answers.forEach((a,i)=>html+=(i+1)+a+(a?'':'-')+' '); html+='</div><div id="cloud_'+row.id+'" class="muted" style="margin-top:4px;"></div>';
   document.getElementById('lastRead').innerHTML='<div style="display:flex;gap:10px;align-items:flex-start;"><img src="'+imgData+'" style="width:120px;border:1px solid #ccc;border-radius:6px;"><div>'+html+'</div></div>';
+  if(document.getElementById('upChk').checked) uploadOmr(row);
+}
+/* ---------- อัปโหลดภาพขึ้น Google Drive (POST → GAS doPost) ---------- */
+function setCloud(id,txt,link){ const r=rows.find(x=>x.id===id); if(r)r.cloud=txt;
+  const el=document.getElementById('cloud_'+id); if(el)el.innerHTML=txt+(link?' <a href="'+link+'" target="_blank">เปิดไฟล์</a>':'');
+  if(document.getElementById('rowsView').classList.contains('active'))renderRows();
+}
+async function uploadOmr(row){
+  setCloud(row.id,'⏳ กำลังอัปขึ้น Drive...');
+  try{
+    const res=await fetch(GAS,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({
+      action:'omrupload', teacher:row.teacher||teacher, img:row.img,
+      studentId:row.studentId, name:row.name||'', answers:row.answers.join(''),
+      score:row.score, total:row.total, date:row.time })});
+    const j=await res.json();
+    if(j&&j.ok){ row.drive=j.view||j.url||''; dbPut(row); setCloud(row.id,'☁️ อัปขึ้น Drive แล้ว',row.drive); }
+    else setCloud(row.id,'⚠️ อัปไม่สำเร็จ: '+((j&&j.error)||''));
+  }catch(e){ setCloud(row.id,'⚠️ อัปไม่ได้ (เน็ต/สิทธิ์) — เก็บในเครื่องแล้ว'); }
 }
 
 /* ---------- ผลที่เก็บ ---------- */
@@ -250,8 +276,8 @@ function renderRows(){
     '<td>'+(r.studentId!=null?('เลขที่ '+r.studentId+'<br>'):'')+'<input value="'+(r.name||'').replace(/"/g,'&quot;')+'" placeholder="ใส่ชื่อ" oninput="setName(\''+r.id+'\',this.value)" style="width:130px;"></td>'+
     '<td class="ansmini">'+r.answers.map((a,i)=>(i+1)+(a||'-')).join(' ')+'</td>'+
     '<td>'+(r.score!==''?(r.score+'/'+r.total):'-')+'</td>'+
-    '<td>'+(r.img?'<img src="'+r.img+'" onclick="bigImg(\''+r.id+'\')">':'-')+'</td>'+
-    '<td><button class="act red sm" onclick="delRow(\''+r.id+'\')">ลบ</button></td></tr>'; });
+    '<td>'+(r.img?'<img src="'+r.img+'" onclick="bigImg(\''+r.id+'\')">':'-')+(r.drive?'<br><a href="'+r.drive+'" target="_blank">☁️ Drive</a>':(r.cloud?'<br><span class="muted" style="font-size:11px">'+r.cloud+'</span>':''))+'</td>'+
+    '<td>'+(r.drive?'':'<button class="act sm" onclick="uploadOmr(rows.find(x=>x.id===\''+r.id+'\'))">☁️ อัป</button> ')+'<button class="act red sm" onclick="delRow(\''+r.id+'\')">ลบ</button></td></tr>'; });
   document.getElementById('rowsTable').innerHTML=html;
 }
 function setName(id,v){ const r=rows.find(x=>x.id===id); if(r){r.name=v;dbPut(r);} }
@@ -259,14 +285,14 @@ function delRow(id){ rows=rows.filter(x=>x.id!==id); if(db)db.transaction('rows'
 function clearRows(){ if(confirm('ล้างผลที่เก็บทั้งหมด?')){ rows=[]; dbClear(); renderRows(); } }
 function bigImg(id){ const r=rows.find(x=>x.id===id); if(r&&r.img){document.getElementById('modalImg').src=r.img;document.getElementById('imgModal').style.display='flex';} }
 function exportCSV(){
-  let out=[['เวลา','ครู','เลขที่','ชื่อ','คะแนน','เต็ม','คำตอบ']];
-  rows.forEach(r=>out.push([r.time,r.teacher||'',r.studentId!=null?r.studentId:'',r.name||'',r.score,r.total,r.answers.join('')]));
+  let out=[['เวลา','ครู','เลขที่','ชื่อ','คะแนน','เต็ม','คำตอบ','ลิงก์ภาพ']];
+  rows.forEach(r=>out.push([r.time,r.teacher||'',r.studentId!=null?r.studentId:'',r.name||'',r.score,r.total,r.answers.join(''),r.drive||'']));
   const csv='﻿'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='ผลOMR_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
 }
 
 /* init */
-(async function(){ await openDB(); rows=(await dbAll()).sort((a,b)=>b.id<a.id?-1:1); teacher=localStorage.getItem('omr_teacher')||'ครู ณัฏฐจิรา ทองงาม'; document.getElementById('teacherBadge').textContent='👩‍🏫 '+teacher; buildSheets(); renderRows(); showGate(); })();
+(async function(){ await openDB(); rows=(await dbAll()).sort((a,b)=>b.id<a.id?-1:1); teacher=localStorage.getItem('omr_teacher')||'ครู ณัฏฐจิรา ทองงาม'; document.getElementById('teacherBadge').textContent='👩‍🏫 '+teacher; if(localStorage.getItem('omr_up')==='0')document.getElementById('upChk').checked=false; buildSheets(); renderRows(); showGate(); })();
 </script>
 </body>
 </html>
