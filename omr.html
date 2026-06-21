@@ -173,9 +173,10 @@ function buildSheets(){
       mk('ชื่อ-สกุล',70,200,560);
       mk('ชั้น',70,250,150); mk('เลขที่',360,250,150);
     }
-    tpl.rows.forEach((row,qi)=>{ const lx=OMR.colX(tpl,row.col,0)-78;
-      const lab=document.createElement('div'); lab.className='qlab'; lab.style.cssText='left:'+lx+'px;top:'+(row.y-22)+'px;font-size:30px;'; lab.textContent=(qi+1)+'.'; sh.appendChild(lab);
-      for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c),r=tpl.r; const b=document.createElement('div'); b.className='bub'; b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:26px;'; b.textContent=CHO[c]; sh.appendChild(b); }
+    const bfont=Math.round(tpl.r*1.05);
+    tpl.rows.forEach((row,qi)=>{ const lx=OMR.labelX(tpl,row.col);
+      const lab=document.createElement('div'); lab.className='qlab'; lab.style.cssText='left:'+lx+'px;top:'+(row.y-tpl.r-4)+'px;font-size:'+Math.max(20,Math.round(tpl.r*1.0))+'px;'; lab.textContent=(qi+1)+'.'; sh.appendChild(lab);
+      for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c),r=tpl.r; const b=document.createElement('div'); b.className='bub'; b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:'+bfont+'px;'; b.textContent=CHO[c]; sh.appendChild(b); }
     });
     slip.appendChild(sh); wrap.appendChild(slip);
   });
@@ -201,7 +202,7 @@ function readSheet(img){
   const cf=['tl','tr','br','bl'].filter(k=>found[k]).length; if(cf<4)return{ok:false,cf};
   const src=['tl','tr','br','bl'].map(k=>({x:tpl.corners[k].cx,y:tpl.corners[k].cy})); const dst=['tl','tr','br','bl'].map(k=>found[k]);
   const h=OMR.computeH(src,dst); if(!h)return{ok:false,cf};
-  const whites=[]; tpl.rows.forEach(r=>{const p=OMR.applyH(h,tpl.whiteX,r.y);whites.push(sample(img,p.x,p.y,8));}); const white=med(whites)||220;
+  const whites=[]; tpl.rows.forEach(r=>{const p=OMR.applyH(h,OMR.whiteXOf(tpl,r.col),r.y);whites.push(sample(img,p.x,p.y,8));}); const white=med(whites)||220;
   const answers=[]; tpl.rows.forEach(row=>{const fills=[]; for(let c=0;c<4;c++){const x=OMR.colX(tpl,row.col,c);const p=OMR.applyH(h,x,row.y);const pr=OMR.applyH(h,x+tpl.r,row.y);const rImg=Math.max(4,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8);fills.push((white-sample(img,p.x,p.y,rImg))/white);} let b=0;for(let c=1;c<4;c++)if(fills[c]>fills[b])b=c; let s=-1;for(let c=0;c<4;c++)if(c!==b&&(s<0||fills[c]>fills[s]))s=c; answers.push((fills[b]>=0.28&&fills[b]-fills[s]>=0.10)?CHO[b]:''); });
   return {ok:true,h,studentId:student?student.id:null,answers,found,tpl};
 }
