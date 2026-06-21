@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ตรวจกระดาษคำตอบ OMR</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Kanit:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;} body{margin:0;font-family:'Sarabun';background:#f4f6fb;color:#1c2230;}
+  header{background:#15401f;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:30;}
+  header h1{font-family:'Kanit';font-size:17px;margin:0;}
+  #teacherBadge{cursor:pointer;background:rgba(255,255,255,.16);padding:5px 11px;border-radius:8px;font-size:13px;font-weight:600;}
+  .tabs{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;}
+  .tabs button{background:rgba(255,255,255,.14);color:#fff;border:none;padding:8px 13px;border-radius:8px;font-family:'Sarabun';font-weight:600;cursor:pointer;}
+  .tabs button.active{background:#f5a623;color:#15401f;}
+  .view{display:none;padding:14px;max-width:1050px;margin:0 auto;} .view.active{display:block;}
+  .panel{background:#fff;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:12px;}
+  h2{font-family:'Kanit';font-size:16px;margin:0 0 8px;color:#15401f;}
+  button.act{background:#1aa363;color:#fff;border:none;padding:9px 15px;border-radius:8px;font-weight:700;cursor:pointer;font-family:'Sarabun';font-size:14.5px;}
+  button.act.blue{background:#2d6cdf;} button.act.gray{background:#6b7280;} button.act.red{background:#e23b4e;}
+  button.sm{padding:5px 10px;font-size:13px;}
+  label{font-weight:600;font-size:14px;} input,select,textarea{font-family:'Sarabun';font-size:14px;padding:7px;border:1.5px solid #cdd3e0;border-radius:7px;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;} .muted{color:#71788a;font-size:13px;}
+  #camWrap{position:relative;width:100%;background:#000;border-radius:12px;overflow:hidden;} #video{width:100%;display:block;} #overlay{position:absolute;inset:0;width:100%;height:100%;}
+  table.rows{width:100%;border-collapse:collapse;font-size:13px;} table.rows th,table.rows td{border:1px solid #dde2ec;padding:5px 7px;vertical-align:top;} table.rows th{background:#15401f;color:#fff;}
+  table.rows img{width:90px;border:1px solid #ccc;border-radius:4px;cursor:pointer;}
+  .ansmini{font-family:'Kanit';font-size:12px;letter-spacing:1px;}
+  .gate{position:fixed;inset:0;background:linear-gradient(135deg,#15401f,#1f6332);z-index:200;display:none;align-items:center;justify-content:center;padding:16px;}
+  .gate .box{background:#fff;border-radius:16px;padding:24px;max-width:440px;width:100%;text-align:center;}
+  .gate select{width:100%;font-size:16px;padding:10px;margin-top:8px;}
+  /* sheet print */
+  .slips{} .slip{display:inline-block;vertical-align:top;border:1px dashed #999;margin:1mm;padding:3mm;position:relative;page-break-inside:avoid;}
+  .slip .sheet{position:relative;width:1000px;height:1414px;transform-origin:top left;}
+  .slip .mk{position:absolute;} .slip .mk svg{width:100%;height:100%;display:block;}
+  .slip .bub{position:absolute;border:2.5px solid #111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Kanit';font-weight:700;color:#aaa;}
+  .slip .qlab{position:absolute;font-family:'Kanit';font-weight:700;} .slip .tx{position:absolute;font-family:'Sarabun';}
+  .slip .wl{position:absolute;border-bottom:2px solid #333;}
+  @media print{ header,.no-print{display:none!important;} .view{display:none!important;padding:0;max-width:none;} .view.printing{display:block!important;} }
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;display:none;align-items:center;justify-content:center;padding:14px;}
+  .modal img{max-width:96vw;max-height:90vh;border-radius:8px;}
+</style>
+</head>
+<body>
+<div class="gate" id="gate"><div class="box">
+  <h2 style="font-size:20px;">🧾 ตรวจกระดาษคำตอบ OMR</h2>
+  <p class="muted">เลือกชื่อครูผู้สอนก่อนเริ่ม (กันข้อมูลปนกัน)</p>
+  <select id="gateTeacher"><option>กำลังโหลด...</option></select>
+  <div style="margin-top:14px;"><button class="act" onclick="confirmTeacher()" style="font-size:16px;padding:11px 24px;">▶️ เริ่มใช้งาน</button></div>
+  <p class="muted" id="gateStat"></p>
+</div></div>
+
+<header>
+  <h1>🧾 ตรวจกระดาษคำตอบ OMR</h1>
+  <span id="teacherBadge" onclick="showGate()">👩‍🏫 —</span>
+  <div class="tabs">
+    <button id="t_scan" class="active" onclick="show('scan')">📷 สแกน</button>
+    <button id="t_gen" onclick="show('gen')">🖨️ สร้างกระดาษ</button>
+    <button id="t_rows" onclick="show('rows')">📋 ผลที่เก็บ</button>
+  </div>
+</header>
+
+<!-- สแกน -->
+<div id="scanView" class="view active">
+  <div class="panel">
+    <div class="row">
+      <label>จำนวนข้อ:</label>
+      <select id="scNQ" onchange="omrTpl=OMR.template(+this.value)"><option>10</option><option>20</option><option>40</option><option>60</option></select>
+      <label>เฉลย (วาง ก/ข/ค/ง ติดกัน เว้นได้):</label>
+      <input id="scKey" placeholder="เช่น ขขกกขคขงคง (ไม่ใส่=ไม่ให้คะแนน)" style="flex:1;min-width:180px;">
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="act" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
+      <button class="act gray" onclick="stopCam()">⏸️ หยุด</button>
+      <label><input type="checkbox" id="beepChk" checked> 🔊 บี๊บ</label>
+      <span class="muted" id="stat">—</span>
+    </div>
+    <p class="muted">จ่อกระดาษให้เห็นครบ 4 มุม → ระบบจับ+เก็บภาพ+บันทึกเป็นแถวอัตโนมัติ · เอากระดาษออกแล้วสแกนใบต่อไป</p>
+  </div>
+  <div class="panel"><div id="camWrap"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div></div>
+  <div class="panel" id="lastRead">ยังไม่เริ่มสแกน</div>
+</div>
+
+<!-- สร้างกระดาษ -->
+<div id="genView" class="view">
+  <div class="panel no-print">
+    <h2>สร้างกระดาษคำตอบ</h2>
+    <div class="row">
+      <label>จำนวนข้อ:</label><select id="gNQ"><option>10</option><option>20</option><option>40</option><option>60</option></select>
+      <label>แบบ:</label>
+      <select id="gType" onchange="gTypeChange()">
+        <option value="generic">เขียนชื่อเอง (กระดาษกลาง ถ่ายเอกสารแจก)</option>
+        <option value="person">มีมาร์กเกอร์เลขที่ (พิมพ์รายคน รู้อัตโนมัติว่าใคร)</option>
+      </select>
+      <label>ขนาด:</label><select id="gSize"><option value="4">4 ใบ/หน้า</option><option value="2">2 ใบ/หน้า</option><option value="1">1 ใบ/หน้า (ใหญ่)</option></select>
+    </div>
+    <div class="row" id="gPersonRow" style="margin-top:8px;display:none;">
+      <button class="act blue sm" onclick="loadClasses()">โหลดห้อง</button>
+      <select id="classSel"><option>— เลือกห้อง —</option></select>
+      <button class="act sm" onclick="loadStudents()">ดึงรายชื่อ</button>
+      <span class="muted" id="gStu"></span>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="act" onclick="buildSheets()">สร้าง</button>
+      <button class="act blue" onclick="printView('gen')">🖨️ พิมพ์ / PDF</button>
+      <span class="muted">แบบเขียนชื่อเอง: พิมพ์ใบเดียวแล้วถ่ายเอกสารแจกได้เลย</span>
+    </div>
+  </div>
+  <div class="slips" id="slips"></div>
+</div>
+
+<!-- ผลที่เก็บ -->
+<div id="rowsView" class="view">
+  <div class="panel">
+    <h2>📋 ผลที่สแกนเก็บไว้ (<span id="rowCount">0</span> ใบ)</h2>
+    <div class="row">
+      <button class="act blue sm" onclick="exportCSV()">⬇️ ดาวน์โหลด CSV</button>
+      <button class="act red sm" onclick="clearRows()">ล้างทั้งหมด</button>
+      <span class="muted">แตะรูปเพื่อดูใหญ่ · แก้ชื่อในช่องได้</span>
+    </div>
+  </div>
+  <div class="panel" style="overflow:auto;"><table class="rows" id="rowsTable"></table></div>
+</div>
+
+<div class="modal" id="imgModal" onclick="this.style.display='none'"><img id="modalImg"></div>
+<canvas id="work" style="display:none;"></canvas>
+<script src="lib/cv.js"></script>
+<script src="lib/aruco.js"></script>
+<script src="omr_lib.js"></script>
+<script>
+const DICT='ARUCO_MIP_36h12';
+const detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
+const dict=new AR.Dictionary(DICT);
+const OMR_CORNER={246:'tl',247:'tr',248:'br',249:'bl'}, CHO=['ก','ข','ค','ง'];
+const GAS='https://script.google.com/macros/s/AKfycbwTID5HorZf1_V3llzh7fpcd_oW96XTQVAvBYPZ1byHu0wyZFTGL8CFA8B5lk9STfku/exec';
+let teacher='', omrTpl=OMR.template(10), rows=[], db=null;
+
+/* ---------- IndexedDB เก็บแถว+ภาพ ---------- */
+function openDB(){ return new Promise(res=>{ const r=indexedDB.open('omrDB',1); r.onupgradeneeded=e=>{ e.target.result.createObjectStore('rows',{keyPath:'id'}); }; r.onsuccess=e=>{db=e.target.result;res();}; r.onerror=()=>res(); }); }
+function dbPut(row){ if(!db)return; db.transaction('rows','readwrite').objectStore('rows').put(row); }
+function dbAll(){ return new Promise(res=>{ if(!db){res([]);return;} const out=[]; const c=db.transaction('rows','readonly').objectStore('rows').openCursor(); c.onsuccess=e=>{const cur=e.target.result; if(cur){out.push(cur.value);cur.continue();}else res(out);}; }); }
+function dbClear(){ if(db) db.transaction('rows','readwrite').objectStore('rows').clear(); }
+
+/* ---------- gate เลือกครู ---------- */
+function jsonp(params){ return new Promise((resolve,reject)=>{ const cb='__cb'+Date.now()+Math.floor(Math.random()*1e4); const s=document.createElement('script'); function done(){try{delete window[cb];}catch(e){} s.remove();} window[cb]=d=>{resolve(d);done();}; s.src=GAS+'?'+new URLSearchParams(Object.assign({},params,{callback:cb})); s.onerror=()=>{reject('net');done();}; document.body.appendChild(s); setTimeout(()=>{if(window[cb]){reject('timeout');done();}},15000); }); }
+async function showGate(){ document.getElementById('gate').style.display='flex'; const sel=document.getElementById('gateTeacher'); sel.innerHTML='<option>กำลังโหลด...</option>'; try{ const t=await jsonp({action:'teachers'}); sel.innerHTML=t.map(x=>'<option'+(x.name===teacher?' selected':'')+'>'+x.name+'</option>').join(''); }catch(e){ sel.innerHTML='<option>'+(teacher||'ครู ณัฏฐจิรา ทองงาม')+'</option>'; document.getElementById('gateStat').textContent='โหลดรายชื่อครูไม่ได้'; } }
+function confirmTeacher(){ const v=document.getElementById('gateTeacher').value; if(!v||v.indexOf('กำลังโหลด')===0){alert('เลือกครูก่อน');return;} teacher=v; localStorage.setItem('omr_teacher',v); document.getElementById('teacherBadge').textContent='👩‍🏫 '+v; document.getElementById('gate').style.display='none'; }
+
+function show(v){ ['scan','gen','rows'].forEach(x=>{document.getElementById(x+'View').classList.toggle('active',x===v);document.getElementById('t_'+x).classList.toggle('active',x===v);}); if(v==='rows')renderRows(); if(v==='gen')gTypeChange(); }
+function printView(id){ const vw=document.getElementById(id+'View'); vw.classList.add('printing'); window.print(); setTimeout(()=>vw.classList.remove('printing'),500); }
+function thaiNum(n){ return String(n).replace(/[0-9]/g,d=>'๐๑๒๓๔๕๖๗๘๙'[d]); }
+
+/* ---------- สร้างกระดาษ ---------- */
+let genRoster=[];
+function gTypeChange(){ document.getElementById('gPersonRow').style.display=document.getElementById('gType').value==='person'?'flex':'none'; }
+async function loadClasses(){ const sel=document.getElementById('classSel'); sel.innerHTML='<option>โหลด...</option>'; try{ const c=await jsonp({action:'classes'}); sel.innerHTML='<option value="">— เลือกห้อง —</option>'+c.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join(''); }catch(e){ sel.innerHTML='<option>โหลดไม่ได้</option>'; } }
+async function loadStudents(){ const cid=document.getElementById('classSel').value; if(!cid){alert('เลือกห้องก่อน');return;} try{ const s=await jsonp({action:'students',class:cid}); genRoster=s.map(x=>({id:x.number,name:x.name})); document.getElementById('gStu').textContent='ได้ '+genRoster.length+' คน'; }catch(e){ alert('ดึงรายชื่อไม่ได้'); } }
+function buildSheets(){
+  const nQ=+document.getElementById('gNQ').value, type=document.getElementById('gType').value, size=document.getElementById('gSize').value;
+  const tpl=OMR.template(nQ); const wrap=document.getElementById('slips'); wrap.innerHTML='';
+  const W={'4':'99mm','2':'135mm','1':'200mm'}[size], SC={'4':0.373,'2':0.51,'1':0.755}[size];
+  const list = type==='person' ? (genRoster.length?genRoster:[{id:1,name:''}]) : [{id:null,name:''}];
+  const copies = type==='person' ? 1 : 1;
+  list.forEach(stu=>{
+    const slip=document.createElement('div'); slip.className='slip'; slip.style.width=W; slip.style.height=({'4':'138mm','2':'190mm','1':'283mm'})[size];
+    const sh=document.createElement('div'); sh.className='sheet'; sh.style.transform='scale('+SC+')';
+    const place=(id,cx,cy,sz)=>{ const d=document.createElement('div'); d.className='mk'; d.style.cssText='left:'+(cx-sz/2)+'px;top:'+(cy-sz/2)+'px;width:'+sz+'px;height:'+sz+'px;'; d.innerHTML=dict.generateSVG(id); sh.appendChild(d); };
+    for(const k in tpl.corners){ const c=tpl.corners[k]; place(c.id,c.cx,c.cy,tpl.markerSize); }
+    if(type==='person'){ place(stu.id,tpl.student.cx,tpl.student.cy,tpl.student.size);
+      const nm=document.createElement('div'); nm.className='tx'; nm.style.cssText='left:190px;top:215px;font-size:30px;font-family:Kanit;'; nm.textContent='เลขที่ '+stu.id+'  '+(stu.name||''); sh.appendChild(nm);
+    } else {
+      // ช่องเขียนชื่อเอง
+      const mk=(label,x,y,w)=>{ const t=document.createElement('div'); t.className='tx'; t.style.cssText='left:'+x+'px;top:'+y+'px;font-size:26px;'; t.textContent=label; sh.appendChild(t); const l=document.createElement('div'); l.className='wl'; l.style.cssText='left:'+(x+ (''+label).length*16+10)+'px;top:'+(y+30)+'px;width:'+w+'px;'; sh.appendChild(l); };
+      mk('ชื่อ-สกุล',70,200,560);
+      mk('ชั้น',70,250,150); mk('เลขที่',360,250,150);
+    }
+    tpl.rows.forEach((row,qi)=>{ const lx=OMR.colX(tpl,row.col,0)-78;
+      const lab=document.createElement('div'); lab.className='qlab'; lab.style.cssText='left:'+lx+'px;top:'+(row.y-22)+'px;font-size:30px;'; lab.textContent=(qi+1)+'.'; sh.appendChild(lab);
+      for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c),r=tpl.r; const b=document.createElement('div'); b.className='bub'; b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:26px;'; b.textContent=CHO[c]; sh.appendChild(b); }
+    });
+    slip.appendChild(sh); wrap.appendChild(slip);
+  });
+}
+
+/* ---------- สแกน ---------- */
+const video=document.getElementById('video'),overlay=document.getElementById('overlay'),octx=overlay.getContext('2d');
+const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
+let stream=null,running=false,lastT=0,armed=true,noSeen=0,lastSavedId=null,stableId=null,stableCount=0;
+let audioCtx=null;
+function beep(f,ms){ if(!document.getElementById('beepChk').checked)return; try{ if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended')audioCtx.resume(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.frequency.value=f||880; o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(.001,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(.25,audioCtx.currentTime+.01); g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+(ms||120)/1000); o.start(); o.stop(audioCtx.currentTime+(ms||120)/1000+.02);}catch(e){} }
+async function startCam(){ omrTpl=OMR.template(+document.getElementById('scNQ').value); try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();audioCtx.resume();}catch(e){}
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:1280}},audio:false}); }catch(e){ document.getElementById('stat').textContent='เปิดกล้องไม่ได้: '+e.message; return; }
+  video.srcObject=stream; await video.play(); running=true; armed=true; lastSavedId=null; loop(); }
+function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); }
+function center(c){return {x:(c[0].x+c[1].x+c[2].x+c[3].x)/4,y:(c[0].y+c[1].y+c[2].y+c[3].y)/4};}
+function sample(img,cx,cy,r){const d=img.data,W=img.width,H=img.height;let s=0,n=0,r2=r*r;for(let y=Math.max(0,cy-r|0);y<=Math.min(H-1,cy+r);y++)for(let x=Math.max(0,cx-r|0);x<=Math.min(W-1,cx+r);x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy>r2)continue;const i=(y*W+x)*4;s+=(d[i]+d[i+1]+d[i+2])/3;n++;}return n?s/n:255;}
+function med(a){if(!a.length)return 0;const b=a.slice().sort((x,y)=>x-y);return b[b.length>>1];}
+function readSheet(img){
+  const tpl=omrTpl; let markers=[]; try{markers=detector.detect(img);}catch(e){return{ok:false,cf:0};}
+  const found={}; let student=null;
+  markers.forEach(mk=>{const c=center(mk.corners); if(OMR_CORNER[mk.id])found[OMR_CORNER[mk.id]]=c; else if(mk.id>=1&&mk.id<=240)student={id:mk.id,c};});
+  const cf=['tl','tr','br','bl'].filter(k=>found[k]).length; if(cf<4)return{ok:false,cf};
+  const src=['tl','tr','br','bl'].map(k=>({x:tpl.corners[k].cx,y:tpl.corners[k].cy})); const dst=['tl','tr','br','bl'].map(k=>found[k]);
+  const h=OMR.computeH(src,dst); if(!h)return{ok:false,cf};
+  const whites=[]; tpl.rows.forEach(r=>{const p=OMR.applyH(h,tpl.whiteX,r.y);whites.push(sample(img,p.x,p.y,8));}); const white=med(whites)||220;
+  const answers=[]; tpl.rows.forEach(row=>{const fills=[]; for(let c=0;c<4;c++){const x=OMR.colX(tpl,row.col,c);const p=OMR.applyH(h,x,row.y);const pr=OMR.applyH(h,x+tpl.r,row.y);const rImg=Math.max(4,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8);fills.push((white-sample(img,p.x,p.y,rImg))/white);} let b=0;for(let c=1;c<4;c++)if(fills[c]>fills[b])b=c; let s=-1;for(let c=0;c<4;c++)if(c!==b&&(s<0||fills[c]>fills[s]))s=c; answers.push((fills[b]>=0.28&&fills[b]-fills[s]>=0.10)?CHO[b]:''); });
+  return {ok:true,h,studentId:student?student.id:null,answers,found,tpl};
+}
+// ดัดภาพให้แบน (canonical 1000x1414 → ย่อ) สำหรับเก็บภาพ เห็นชื่อที่เขียน
+function warpImage(img,h){
+  const OW=460,OH=650; const oc=document.createElement('canvas'); oc.width=OW;oc.height=OH; const ox=oc.getContext('2d'); const od=ox.createImageData(OW,OH); const d=od.data, sd=img.data,SW=img.width,SH=img.height;
+  for(let y=0;y<OH;y++)for(let x=0;x<OW;x++){ const cx=x/OW*1000, cy=y/OH*1414; const p=OMR.applyH(h,cx,cy); const sx=p.x|0,sy=p.y|0; const di=(y*OW+x)*4; if(sx<0||sx>=SW||sy<0||sy>=SH){d[di]=d[di+1]=d[di+2]=240;d[di+3]=255;continue;} const si=(sy*SW+sx)*4; d[di]=sd[si];d[di+1]=sd[si+1];d[di+2]=sd[si+2];d[di+3]=255; }
+  ox.putImageData(od,0,0); return oc.toDataURL('image/jpeg',0.6);
+}
+function loop(){
+  if(!running)return; requestAnimationFrame(loop); const now=performance.now(); if(now-lastT<130)return; lastT=now; if(!video.videoWidth)return;
+  const dw=900,dh=Math.round(900*video.videoHeight/video.videoWidth); work.width=dw;work.height=dh;overlay.width=dw;overlay.height=dh;
+  wctx.drawImage(video,0,0,dw,dh); const img=wctx.getImageData(0,0,dw,dh);
+  const out=readSheet(img); octx.clearRect(0,0,dw,dh); const stat=document.getElementById('stat');
+  if(out.ok){
+    drawOverlay(out); noSeen=0;
+    const idKey = out.studentId!=null ? ('id'+out.studentId) : 'generic';
+    if(out.studentId!=null && out.studentId===lastSavedId){ stat.textContent='เลขที่ '+out.studentId+' บันทึกแล้ว ✓ — เอาออกแล้วสแกนใบต่อไป'; return; }
+    if(out.studentId!=null){ if(out.studentId===stableId)stableCount++; else{stableId=out.studentId;stableCount=1;} if(stableCount>=3){ capture(out,img); lastSavedId=out.studentId; } else stat.textContent='กำลังจับเลขที่ '+out.studentId+'... ('+stableCount+'/3)'; }
+    else { // generic: ใช้ armed
+      if(armed){ stableCount++; if(stableCount>=3){ capture(out,img); armed=false; stableCount=0; } else stat.textContent='กำลังจับ... ('+stableCount+'/3)'; }
+      else stat.textContent='บันทึกแล้ว ✓ — เอากระดาษออกแล้วสแกนใบต่อไป'; }
+  } else { noSeen++; if(noSeen>5){ armed=true; lastSavedId=null; stableId=null; stableCount=0; } stat.textContent='เห็นมุม '+out.cf+'/4 — ขยับให้เห็นครบทั้งใบ'; }
+}
+function drawOverlay(out){ octx.strokeStyle='#1aa363';octx.lineWidth=2; ['tl','tr','br','bl'].forEach(k=>{const c=out.found[k];octx.beginPath();octx.arc(c.x,c.y,7,0,7);octx.stroke();});
+  out.tpl.rows.forEach((row,qi)=>{for(let c=0;c<4;c++){const x=OMR.colX(out.tpl,row.col,c);const p=OMR.applyH(out.h,x,row.y);const pk=out.answers[qi]===CHO[c];octx.beginPath();octx.arc(p.x,p.y,5,0,7);octx.strokeStyle=pk?'#e23b4e':'rgba(45,108,223,.4)';octx.lineWidth=pk?3:1;octx.stroke();}}); }
+function gradeOf(answers){ const key=document.getElementById('scKey').value.replace(/\s/g,''); if(!key)return null; let sc=0,tot=0; answers.forEach((a,i)=>{ const k=key[i]; if(k){tot++; if(a===k)sc++;} }); return {score:sc,total:tot}; }
+function capture(out,img){
+  const imgData=warpImage(img,out.h);
+  const g=gradeOf(out.answers);
+  const row={ id:Date.now()+'_'+Math.floor(Math.random()*1000), time:new Date().toLocaleString('th-TH'), teacher, studentId:out.studentId, name:'', answers:out.answers.slice(), score:g?g.score:'', total:g?g.total:'', img:imgData };
+  rows.unshift(row); dbPut(row);
+  beep(990,140);
+  let html='<b>✅ เก็บแล้ว</b> '+(out.studentId!=null?('เลขที่ '+out.studentId):'(เขียนชื่อเอง)')+(g?(' · คะแนน '+g.score+'/'+g.total):'')+'<div class="ansmini" style="margin-top:4px;">';
+  out.answers.forEach((a,i)=>html+=(i+1)+a+(a?'':'-')+' '); html+='</div>';
+  document.getElementById('lastRead').innerHTML='<div style="display:flex;gap:10px;align-items:flex-start;"><img src="'+imgData+'" style="width:120px;border:1px solid #ccc;border-radius:6px;"><div>'+html+'</div></div>';
+}
+
+/* ---------- ผลที่เก็บ ---------- */
+function renderRows(){
+  const key=document.getElementById('scKey').value.replace(/\s/g,'');
+  document.getElementById('rowCount').textContent=rows.length;
+  let html='<tr><th>เวลา</th><th>เลขที่/ชื่อ</th><th>คำตอบ</th><th>คะแนน</th><th>ภาพ</th><th></th></tr>';
+  rows.forEach(r=>{ html+='<tr><td>'+r.time+'</td>'+
+    '<td>'+(r.studentId!=null?('เลขที่ '+r.studentId+'<br>'):'')+'<input value="'+(r.name||'').replace(/"/g,'&quot;')+'" placeholder="ใส่ชื่อ" oninput="setName(\''+r.id+'\',this.value)" style="width:130px;"></td>'+
+    '<td class="ansmini">'+r.answers.map((a,i)=>(i+1)+(a||'-')).join(' ')+'</td>'+
+    '<td>'+(r.score!==''?(r.score+'/'+r.total):'-')+'</td>'+
+    '<td>'+(r.img?'<img src="'+r.img+'" onclick="bigImg(\''+r.id+'\')">':'-')+'</td>'+
+    '<td><button class="act red sm" onclick="delRow(\''+r.id+'\')">ลบ</button></td></tr>'; });
+  document.getElementById('rowsTable').innerHTML=html;
+}
+function setName(id,v){ const r=rows.find(x=>x.id===id); if(r){r.name=v;dbPut(r);} }
+function delRow(id){ rows=rows.filter(x=>x.id!==id); if(db)db.transaction('rows','readwrite').objectStore('rows').delete(id); renderRows(); }
+function clearRows(){ if(confirm('ล้างผลที่เก็บทั้งหมด?')){ rows=[]; dbClear(); renderRows(); } }
+function bigImg(id){ const r=rows.find(x=>x.id===id); if(r&&r.img){document.getElementById('modalImg').src=r.img;document.getElementById('imgModal').style.display='flex';} }
+function exportCSV(){
+  let out=[['เวลา','ครู','เลขที่','ชื่อ','คะแนน','เต็ม','คำตอบ']];
+  rows.forEach(r=>out.push([r.time,r.teacher||'',r.studentId!=null?r.studentId:'',r.name||'',r.score,r.total,r.answers.join('')]));
+  const csv='﻿'+out.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='ผลOMR_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+}
+
+/* init */
+(async function(){ await openDB(); rows=(await dbAll()).sort((a,b)=>b.id<a.id?-1:1); teacher=localStorage.getItem('omr_teacher')||'ครู ณัฏฐจิรา ทองงาม'; document.getElementById('teacherBadge').textContent='👩‍🏫 '+teacher; buildSheets(); renderRows(); showGate(); })();
+</script>
+</body>
+</html>

@@ -143,7 +143,7 @@
   <span id="teacherBadge" onclick="showGate()" title="คลิกเพื่อเปลี่ยนครู">👩‍🏫 —</span>
   <div class="tabs">
     <button id="t_test" class="active" onclick="showView('test')">📷 สอบ(การ์ด)</button>
-    <button id="t_omr" onclick="showView('omr')">📄 OMR</button>
+    <button onclick="location.href='omr.html'" title="ไปแอปตรวจกระดาษคำตอบ OMR">📄 OMR (แยกแอป)</button>
     <button id="t_q" onclick="showView('q')">📝 คำถาม</button>
     <button id="t_res" onclick="showView('res')">📊 ผลสอบ</button>
     <button id="t_live" onclick="showView('live')">📺 จอใหญ่</button>
@@ -265,46 +265,6 @@
   </div>
 </div>
 
-<!-- ============ OMR (กระดาษคำตอบ) ============ -->
-<div id="omrView" class="view">
-  <div class="panel">
-    <div class="row">
-      <b>📄 ตรวจด้วยกระดาษคำตอบ</b>
-      <span class="muted">ชุด: <b id="omrSet">—</b> (<span id="omrNQ">0</span> ข้อ)</span>
-      <label style="margin-left:auto;">โหมด:</label>
-      <select id="omrModeSel" onchange="omrSetMode(this.value)"><option value="pre">📘 ก่อนเรียน</option><option value="post">📗 หลังเรียน</option></select>
-    </div>
-    <div class="row" style="margin-top:8px;">
-      <button class="act green" id="omrBtnStart" onclick="omrStart()">▶️ เปิดกล้องสแกน</button>
-      <button class="act gray" onclick="omrStop()">⏸️ หยุด</button>
-      <button class="act" onclick="omrBuildSheets()">🖨️ สร้าง/พิมพ์กระดาษทั้งห้อง</button>
-      <span class="muted" id="omrStat">—</span>
-    </div>
-    <div class="row" style="margin-top:6px;">
-      <label><input type="checkbox" id="omrReviewChk" onchange="omrToggleReview(this.checked)"> ✋ ยืนยันก่อนบันทึก (ครูตรวจ/ปัดแก้ก่อน)</label>
-      <label style="margin-left:14px;"><input type="checkbox" id="omrBeepChk" checked onchange="omrToggleBeep(this.checked)"> 🔊 เสียงบี๊บ</label>
-    </div>
-    <p class="muted">จ่อกล้องให้เห็นกระดาษทั้งแผ่น (ครบ 4 มุม) · โหมดปกติ = จับแล้วบันทึก+บี๊บอัตโนมัติ · เอากระดาษออกแล้วสแกนคนต่อไป</p>
-  </div>
-  <div class="panel"><div id="omrCamWrap"><video id="omrVideo" playsinline muted></video><canvas id="omrOverlay"></canvas></div></div>
-  <div class="panel" id="omrResult">ยังไม่เริ่มสแกน</div>
-</div>
-
-<!-- ============ OMR GENERATOR (พิมพ์กระดาษ) ============ -->
-<div id="omrgenView" class="view">
-  <div class="panel no-print">
-    <div class="row">
-      <b>🖨️ กระดาษคำตอบทั้งห้อง</b>
-      <span class="muted">ชุด <b id="omrgSet">—</b> · <span id="omrgN">0</span> ข้อ · <span id="omrgStu">0</span> คน</span>
-      <button class="act sm" onclick="omrBuildSheets()">สร้างใหม่</button>
-      <button class="act green sm" onclick="printView('omrgen')">🖨️ พิมพ์ / PDF (4 แผ่น/หน้า)</button>
-      <button class="act gray sm" onclick="showView('omr')">◀ กลับไปสแกน</button>
-    </div>
-    <p class="muted">พิมพ์แล้วตัดตามเส้นประ แจกนักเรียนตามเลขที่ · กระดาษ ¼ A4 ต่อคน</p>
-  </div>
-  <div id="omrSheets"></div>
-</div>
-
 <!-- ============ GENERATOR ============ -->
 <div id="genView" class="view">
   <div class="panel no-print">
@@ -366,7 +326,6 @@
 
 <script src="lib/cv.js"></script>
 <script src="lib/aruco.js"></script>
-<script src="omr_lib.js"></script>
 <script>
 /* ===================== ค่าคงที่ + ตัวแปร ===================== */
 const DICT='ARUCO_MIP_36h12', DET_WIDTH=720;
@@ -446,7 +405,7 @@ function defaultQuestionSet(){
 
 /* ===================== แท็บ ===================== */
 function showView(v){
-  ['test','omr','omrgen','q','res','live','gen','set'].forEach(x=>{
+  ['test','q','res','live','gen','set'].forEach(x=>{
     const vw=document.getElementById(x+'View'); if(vw) vw.classList.toggle('active', x===v);
     const tb=document.getElementById('t_'+x); if(tb) tb.classList.toggle('active', x===v);
   });
@@ -454,7 +413,6 @@ function showView(v){
   if(v==='res') renderResults();
   if(v==='test'){ renderQShow(); renderLiveGrid(); }
   if(v==='live') startViewer();
-  if(v==='omr') omrRefresh();
 }
 function printView(id){
   const vw=document.getElementById(id+'View'); if(!vw) return;
@@ -897,144 +855,6 @@ function buildCards(){
       '<div class="stu-name">'+(stu.name?(num+' · '+stu.name):('เลขที่ '+num))+'</div>';
     wrap.appendChild(card);
   });
-}
-
-/* ===================== OMR: กระดาษคำตอบ ===================== */
-const OMR_CORNER={246:'tl',247:'tr',248:'br',249:'bl'};
-const CHO4=['ก','ข','ค','ง'];
-let omrMode='pre', omrStream=null, omrRunning=false, omrLastT=0, omrTpl=null;
-function omrSetMode(v){ omrMode=v; }
-function omrRefresh(){
-  omrTpl=OMR.template(state.questions.length||10);
-  document.getElementById('omrSet').textContent=state.qsetName||'-';
-  document.getElementById('omrNQ').textContent=thaiNum(state.questions.length);
-  document.getElementById('omrModeSel').value=omrMode;
-}
-function omrBuildSheets(){
-  if(!state.roster||!state.roster.length) state.roster=getRosterFromInput();
-  const nQ=state.questions.length||10, tpl=OMR.template(nQ);
-  document.getElementById('omrgSet').textContent=state.qsetName||'-';
-  document.getElementById('omrgN').textContent=thaiNum(nQ);
-  document.getElementById('omrgStu').textContent=thaiNum(state.roster.length);
-  const wrap=document.getElementById('omrSheets'); wrap.innerHTML='';
-  const SCALE=0.373;
-  state.roster.forEach(stu=>{
-    const slip=document.createElement('div'); slip.className='omr-slip';
-    const sh=document.createElement('div'); sh.className='sheet'; sh.style.transform='scale('+SCALE+')';
-    const place=(id,cx,cy,sz)=>{ const d=document.createElement('div'); d.className='mk'; d.style.cssText='left:'+(cx-sz/2)+'px;top:'+(cy-sz/2)+'px;width:'+sz+'px;height:'+sz+'px;'; d.innerHTML=dict.generateSVG(id); sh.appendChild(d); };
-    for(const k in tpl.corners){ const c=tpl.corners[k]; place(c.id,c.cx,c.cy,tpl.markerSize); }
-    place(stu.id, tpl.student.cx, tpl.student.cy, tpl.student.size);
-    const nm=document.createElement('div'); nm.className='nm'; nm.style.cssText='left:195px;top:212px;font-size:30px;'; nm.textContent='เลขที่ '+stu.id+'  '+(stu.name||''); sh.appendChild(nm);
-    tpl.rows.forEach((row,qi)=>{
-      const lx=OMR.colX(tpl,row.col,0)-78;
-      const lab=document.createElement('div'); lab.className='qlab'; lab.style.cssText='left:'+lx+'px;top:'+(row.y-22)+'px;font-size:30px;'; lab.textContent=(qi+1)+'.'; sh.appendChild(lab);
-      for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c),r=tpl.r;
-        const b=document.createElement('div'); b.className='bub'; b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:26px;'; b.textContent=CHO4[c]; sh.appendChild(b); }
-    });
-    slip.appendChild(sh); wrap.appendChild(slip);
-  });
-  showView('omrgen');
-}
-const omrVideo=document.getElementById('omrVideo'), omrOverlay=document.getElementById('omrOverlay'), omrOctx=omrOverlay.getContext('2d');
-// เสียงบี๊บ (Web Audio — ไม่ต้องมีไฟล์)
-let audioCtx=null, omrBeepOn=true;
-function omrToggleBeep(v){ omrBeepOn=v; }
-function beep(freq, ms){ if(!omrBeepOn)return; try{ if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended')audioCtx.resume(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type='sine'; o.frequency.value=freq||880; o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0.001,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.25,audioCtx.currentTime+0.01); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(ms||120)/1000); o.start(); o.stop(audioCtx.currentTime+(ms||120)/1000+0.02);}catch(e){} }
-
-// โหมดยืนยัน + สถานะการจับ
-let omrReview=false, omrFrozen=false, omrStableId=null, omrStableCount=0, omrLastSavedId=null, omrNoSeen=0, omrFrozenAns=null, omrFrozenSid=null;
-function omrToggleReview(v){ omrReview=v; }
-
-async function omrStart(){
-  omrRefresh();
-  if(!state.questions.length){ document.getElementById('omrStat').textContent='ยังไม่มีคำถามในชุดนี้ (ไปแท็บ 📝 คำถาม)'; return; }
-  try{ if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)(); audioCtx.resume(); }catch(e){}
-  try{ omrStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:1280}},audio:false}); }
-  catch(e){ document.getElementById('omrStat').textContent='เปิดกล้องไม่ได้: '+e.message; return; }
-  omrVideo.srcObject=omrStream; await omrVideo.play(); omrRunning=true; omrFrozen=false; omrLastSavedId=null; omrStableId=null; omrStableCount=0; omrLoop();
-}
-function omrStop(){ omrRunning=false; if(omrStream)omrStream.getTracks().forEach(t=>t.stop()); }
-function omrLoop(){
-  if(!omrRunning)return; requestAnimationFrame(omrLoop);
-  if(omrFrozen)return;   // หยุดอ่านระหว่างครูตรวจ
-  const now=performance.now(); if(now-omrLastT<130)return; omrLastT=now; if(!omrVideo.videoWidth)return;
-  const dw=900,dh=Math.round(900*omrVideo.videoHeight/omrVideo.videoWidth);
-  work.width=dw; work.height=dh; omrOverlay.width=dw; omrOverlay.height=dh;
-  wctx.drawImage(omrVideo,0,0,dw,dh);
-  const out=omrRead(wctx.getImageData(0,0,dw,dh));
-  omrOctx.clearRect(0,0,dw,dh);
-  const stat=document.getElementById('omrStat');
-  if(out.ok && out.studentId){
-    omrDrawOverlay(out); omrNoSeen=0;
-    if(out.studentId===omrStableId) omrStableCount++; else { omrStableId=out.studentId; omrStableCount=1; }
-    if(out.studentId===omrLastSavedId){ stat.textContent='เลขที่ '+out.studentId+' บันทึกแล้ว ✓ — เอากระดาษออกแล้วสแกนคนต่อไป'; }
-    else if(omrStableCount>=3){
-      if(omrReview){ omrFreeze(out); }
-      else { omrSaveResult(out.studentId, out.answers); beep(990,140); omrLastSavedId=out.studentId; }
-    } else { stat.textContent='กำลังจับเลขที่ '+out.studentId+'... ('+omrStableCount+'/3)'; }
-  } else if(out.ok){ omrDrawOverlay(out); stat.textContent='เห็น 4 มุมแล้ว แต่ยังไม่เจอมาร์กเกอร์เลขที่'; }
-  else { omrNoSeen++; if(omrNoSeen>6){ omrLastSavedId=null; omrStableId=null; omrStableCount=0; } stat.textContent='เห็นมุม '+out.cornersFound+'/4 — ขยับให้เห็นครบทั้งแผ่น'; }
-}
-function omrFreeze(out){ omrFrozen=true; omrFrozenSid=out.studentId; omrFrozenAns=out.answers.slice(); beep(660,90); omrRenderReview(); }
-function omrRenderReview(){
-  const sid=omrFrozenSid, stu=state.roster.find(s=>s.id===sid);
-  let sc=0; state.questions.forEach((q,i)=>{ if(omrFrozenAns[i]&&omrFrozenAns[i]===q.correct)sc++; });
-  let html='<div style="background:#fff7e8;border:1.5px solid #f5a623;border-radius:10px;padding:10px;">';
-  html+='<b>✋ ตรวจก่อนบันทึก — เลขที่ '+sid+' '+(stu?(stu.name||''):'(ไม่อยู่ในรายชื่อห้องนี้)')+'</b> · คะแนนชั่วคราว '+sc+'/'+state.questions.length;
-  html+='<div style="margin-top:8px;">';
-  state.questions.forEach((q,i)=>{
-    html+='<div style="display:flex;align-items:center;gap:4px;margin:3px 0;flex-wrap:wrap;"><b style="width:36px;">'+(i+1)+'.</b>';
-    CHO4.forEach(L=>{ const sel=omrFrozenAns[i]===L, correct=q.correct===L;
-      html+='<button onclick="omrPick('+i+",'"+L+"')\" style=\"padding:4px 11px;border-radius:6px;border:2px solid "+(sel?'#1aa363':(correct?'#1aa363':'#ccc'))+";background:"+(sel?'#1aa363':'#fff')+";color:"+(sel?'#fff':(correct?'#1aa363':'#333'))+";font-weight:700;font-family:Kanit;cursor:pointer;\">"+L+(correct?'✓':'')+'</button>'; });
-    html+='<button onclick="omrPick('+i+",'')\" style=\"padding:4px 9px;border-radius:6px;border:2px solid "+(!omrFrozenAns[i]?'#e2a23b':'#ccc')+";background:#fff;font-family:Sarabun;cursor:pointer;\">เว้น</button></div>";
-  });
-  html+='</div><div style="margin-top:10px;"><button class="act green" onclick="omrConfirmSave()">✓ บันทึก (เลขที่ '+sid+')</button> &nbsp;<button class="act gray" onclick="omrCancelReview()">↻ สแกนใหม่</button></div>';
-  html+='<div class="muted" style="margin-top:4px;">✓ = เฉลยที่ถูก · แตะปุ่มเพื่อแก้คำตอบที่อ่านพลาด</div></div>';
-  document.getElementById('omrResult').innerHTML=html;
-  document.getElementById('omrStat').textContent='หยุดให้ครูตรวจ — เลขที่ '+sid;
-}
-function omrPick(i,L){ omrFrozenAns[i]=L; omrRenderReview(); }
-function omrConfirmSave(){ omrSaveResult(omrFrozenSid, omrFrozenAns); beep(990,150); omrLastSavedId=omrFrozenSid; omrFrozen=false; omrStableId=null; omrStableCount=0; }
-function omrCancelReview(){ omrFrozen=false; omrStableId=null; omrStableCount=0; document.getElementById('omrResult').innerHTML='↻ สแกนใหม่ — จ่อกระดาษอีกครั้ง'; }
-function omrSaveResult(sid, answers){
-  const stu=state.roster.find(s=>s.id===sid);
-  const sess=state.sessions[omrMode]; if(!sess[sid])sess[sid]={};
-  answers.forEach((a,i)=>{ if(a) sess[sid][i]=a; else delete sess[sid][i]; });
-  save();
-  let sc=0; state.questions.forEach((q,i)=>{ if(answers[i]&&answers[i]===q.correct)sc++; });
-  const modeTh=omrMode==='pre'?'ก่อนเรียน':'หลังเรียน';
-  let html='<b>✅ บันทึกแล้ว — เลขที่ '+sid+' '+(stu?(stu.name||''):'(ไม่อยู่ในรายชื่อห้องนี้)')+'</b> · '+modeTh+' · คะแนน <b>'+sc+'/'+state.questions.length+'</b><div class="omr-res-row">';
-  answers.forEach((a,i)=>{ const key=state.questions[i]?state.questions[i].correct:''; let cls='omr-qa'; if(!a)cls+=' blank'; else if(key&&a===key)cls+=' ok'; else if(key)cls+=' wrong'; html+='<span class="'+cls+'">'+(i+1)+'.'+(a||'–')+'</span>'; });
-  html+='</div>';
-  document.getElementById('omrResult').innerHTML=html;
-}
-function omrCenter(c){ return {x:(c[0].x+c[1].x+c[2].x+c[3].x)/4, y:(c[0].y+c[1].y+c[2].y+c[3].y)/4}; }
-function omrSample(img,cx,cy,r){ const d=img.data,W=img.width,H=img.height; let s=0,n=0,r2=r*r;
-  for(let y=Math.max(0,cy-r|0);y<=Math.min(H-1,cy+r);y++)for(let x=Math.max(0,cx-r|0);x<=Math.min(W-1,cx+r);x++){ const dx=x-cx,dy=y-cy; if(dx*dx+dy*dy>r2)continue; const i=(y*W+x)*4; s+=(d[i]+d[i+1]+d[i+2])/3; n++; } return n?s/n:255; }
-function omrMedian(a){ if(!a.length)return 0; const b=a.slice().sort((x,y)=>x-y); return b[b.length>>1]; }
-function omrRead(img){
-  const tpl=omrTpl||OMR.template(state.questions.length||10);
-  let markers=[]; try{ markers=detector.detect(img);}catch(e){return{ok:false,cornersFound:0};}
-  const found={}; let student=null;
-  markers.forEach(mk=>{ const c=omrCenter(mk.corners); if(OMR_CORNER[mk.id]) found[OMR_CORNER[mk.id]]=c; else if(mk.id>=1&&mk.id<=240) student={id:mk.id,c}; });
-  const cf=['tl','tr','br','bl'].filter(k=>found[k]).length; if(cf<4) return {ok:false,cornersFound:cf};
-  const src=['tl','tr','br','bl'].map(k=>({x:tpl.corners[k].cx,y:tpl.corners[k].cy}));
-  const dst=['tl','tr','br','bl'].map(k=>found[k]);
-  const h=OMR.computeH(src,dst); if(!h) return {ok:false,cornersFound:cf};
-  const whites=[]; tpl.rows.forEach(row=>{ const p=OMR.applyH(h,tpl.whiteX,row.y); whites.push(omrSample(img,p.x,p.y,8)); });
-  const white=omrMedian(whites)||220;
-  const answers=[];
-  tpl.rows.forEach((row)=>{ const fills=[];
-    for(let c=0;c<4;c++){ const x=OMR.colX(tpl,row.col,c); const p=OMR.applyH(h,x,row.y); const pr=OMR.applyH(h,x+tpl.r,row.y); const rImg=Math.max(4,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8); fills.push((white-omrSample(img,p.x,p.y,rImg))/white); }
-    let best=0; for(let c=1;c<4;c++) if(fills[c]>fills[best])best=c; let sec=-1; for(let c=0;c<4;c++) if(c!==best&&(sec<0||fills[c]>fills[sec]))sec=c;
-    answers.push((fills[best]>=0.28 && fills[best]-fills[sec]>=0.10)?CHO4[best]:'');
-  });
-  return {ok:true,h,studentId:student?student.id:null,answers,found,tpl};
-}
-function omrDrawOverlay(out){
-  omrOctx.strokeStyle='#1aa363'; omrOctx.lineWidth=2;
-  ['tl','tr','br','bl'].forEach(k=>{ const c=out.found[k]; omrOctx.beginPath(); omrOctx.arc(c.x,c.y,7,0,7); omrOctx.stroke(); });
-  out.tpl.rows.forEach((row,qi)=>{ for(let c=0;c<4;c++){ const x=OMR.colX(out.tpl,row.col,c); const p=OMR.applyH(out.h,x,row.y); const picked=out.answers[qi]===CHO4[c]; omrOctx.beginPath(); omrOctx.arc(p.x,p.y,5,0,7); omrOctx.strokeStyle=picked?'#e23b4e':'rgba(45,108,223,.4)'; omrOctx.lineWidth=picked?3:1; omrOctx.stroke(); } });
 }
 
 /* ===================== ล้างข้อมูล ===================== */
