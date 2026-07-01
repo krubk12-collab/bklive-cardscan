@@ -40,6 +40,13 @@
   .bstu.answered .bans{ color:var(--green);}
   #liveQ .qt{ font-family:'Kanit'; font-size:22px; color:var(--navy); font-weight:700;}
   #liveQ .ch{ font-size:17px; margin:3px 0;}
+  /* จอใหญ่แบบนำเสนอ (ใช้สไตล์เดียวกับหน้าเต็มจอ) */
+  .bigstage{ background:linear-gradient(160deg,#1b2540 0%,#0f1830 100%); color:#fff; padding:2.2vh 2.4vw;}
+  .bigstage .pv-question{ margin-top:1.6vh;}
+  .bigstage .big-grid{ margin-top:1.8vh; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px;}
+  .bigstage .bstu{ border-width:2px; padding:6px 4px; border-radius:10px;}
+  .bigstage .bstu .bn{ font-size:12px;} .bigstage .bstu .bnm{ font-size:12px;}
+  .bigstage .bstu .bans{ font-size:30px;}
 
   /* gate เลือกครูก่อนเริ่ม */
   #gate{ position:fixed; inset:0; background:linear-gradient(135deg,#1b2540,#2d3a63); z-index:2000; display:none; align-items:center; justify-content:center; padding:16px;}
@@ -402,9 +409,15 @@
     </div>
     <p class="muted" style="margin-top:6px;">เปิดหน้านี้บนคอม/โปรเจกเตอร์ · มือถือไปแท็บ 📷 สอบ ตั้งรหัสห้องให้ตรงกัน · ผลจะขึ้นสดทันทีที่สแกน</p>
   </div>
-  <div class="panel" id="liveQ"></div>
-  <div class="panel">
-    <div class="big-count" id="liveCount">รอข้อมูลจากมือถือ...</div>
+  <div class="panel bigstage" id="liveStage">
+    <div class="pv-top">
+      <span class="pv-qnum" id="bQnum">ข้อ –</span>
+      <span class="pv-mode" id="bMode"></span>
+      <span class="pv-count" id="bCount">รอข้อมูลจากมือถือ...</span>
+    </div>
+    <div class="pv-progress"><div class="pv-progress-fill" id="bBar"></div></div>
+    <div class="pv-question" id="bQuestion">รอข้อมูลจากมือถือ... (เปิดแท็บ 📷 สอบ บนมือถือ ตั้งรหัสห้องให้ตรงกัน แล้วสแกน)</div>
+    <div class="pv-choices" id="bChoices"></div>
     <div class="big-grid" id="bigGrid"></div>
   </div>
 </div>
@@ -1037,14 +1050,20 @@ function startViewer(){
 function setViewerStat(t,c){ const e=document.getElementById('viewerStat'); e.textContent=t; e.className='tag '+(c||''); }
 function renderBig(data){
   let d; try{ d=JSON.parse(data); }catch(e){ return; }
-  const modeTh=d.mode==='pre'?'ก่อนเรียน':'หลังเรียน';
-  let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{ ch+='<div class="ch"><b>'+L+'.</b> '+((d.choices&&d.choices[i])||'')+'</div>'; });
-  document.getElementById('liveQ').innerHTML='<div class="qt">['+modeTh+'] ข้อ '+thaiNum(d.q+1)+'/'+thaiNum(d.total)+' — '+(d.qtext||'')+'</div>'+ch;
+  const modeTh=d.mode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน';
+  document.getElementById('bQnum').textContent='ข้อ '+thaiNum((d.q||0)+1)+'/'+thaiNum(d.total||0);
+  document.getElementById('bMode').textContent=modeTh;
+  document.getElementById('bQuestion').textContent='ข้อ '+thaiNum((d.q||0)+1)+'. '+(d.qtext||'');
+  let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{
+    ch+='<div class="pv-choice"><span class="pv-letter">'+L+'</span><span class="pv-txt">'+((d.choices&&d.choices[i])||'')+'</span></div>'; });
+  document.getElementById('bChoices').innerHTML=ch;
   let answered=0,html='';
   (d.students||[]).forEach(s=>{ const a=s.ans; if(a)answered++;
     html+='<div class="bstu'+(a?' answered':'')+'"><div class="bn">เลขที่ '+thaiNum(s.id)+'</div><div class="bnm">'+(s.name||'')+'</div><div class="bans">'+(a?'✓':'–')+'</div></div>'; });
   document.getElementById('bigGrid').innerHTML=html;
-  document.getElementById('liveCount').textContent='ตอบแล้ว '+answered+'/'+(d.students||[]).length+' คน';
+  const tot=(d.students||[]).length;
+  document.getElementById('bCount').textContent='ตอบแล้ว '+thaiNum(answered)+'/'+thaiNum(tot)+' คน';
+  document.getElementById('bBar').style.width=(tot?Math.round(answered/tot*100):0)+'%';
 }
 function toggleFull(){ const el=document.documentElement; if(!document.fullscreenElement){ el.requestFullscreen&&el.requestFullscreen(); } else { document.exitFullscreen&&document.exitFullscreen(); } }
 
