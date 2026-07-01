@@ -75,6 +75,35 @@
   .qshow .qt{ font-weight:700; font-size:15px; margin-bottom:6px;}
   .qshow .ch{ font-size:13.5px; margin:2px 0;}
 
+  /* ===== หน้าคำถามเต็มจอ (นำเสนอ — ให้เด็กหลังห้องอ่านชัด) ===== */
+  #presentOverlay{ position:fixed; inset:0; z-index:1000; display:none; flex-direction:column;
+    background:linear-gradient(160deg,#1b2540 0%,#0f1830 100%); color:#fff;
+    padding:2.4vh 2.6vw; box-sizing:border-box; font-family:'Sarabun',sans-serif; }
+  #presentOverlay.on{ display:flex; }
+  .pv-top{ display:flex; align-items:center; gap:2vw; font-family:'Kanit'; flex-shrink:0; }
+  .pv-qnum{ font-size:clamp(22px,2.9vw,44px); font-weight:700; background:var(--amber); color:var(--navy);
+    padding:.1em .55em; border-radius:14px; white-space:nowrap; }
+  .pv-mode{ font-size:clamp(15px,1.9vw,28px); color:#aeb9dc; white-space:nowrap; }
+  .pv-count{ margin-left:auto; font-size:clamp(18px,2.4vw,36px); font-weight:700; color:#7de3b0;
+    font-family:'Kanit'; white-space:nowrap; }
+  .pv-body{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:2.4vh; min-height:0; overflow:auto; }
+  .pv-question{ font-family:'Kanit'; font-weight:700; font-size:clamp(28px,4vw,62px); line-height:1.22; }
+  .pv-choices{ display:flex; flex-direction:column; gap:1.5vh; }
+  .pv-choice{ display:flex; align-items:center; gap:1.4vw; background:rgba(255,255,255,.06);
+    border:2px solid rgba(255,255,255,.13); border-radius:18px; padding:1.3vh 1.8vw;
+    font-size:clamp(22px,3vw,48px); line-height:1.2; }
+  .pv-choice .pv-letter{ flex-shrink:0; width:1.7em; height:1.7em; border-radius:16px; display:flex;
+    align-items:center; justify-content:center; font-family:'Kanit'; font-weight:700; color:#fff; }
+  .pv-choices .pv-choice:nth-child(1) .pv-letter{ background:var(--blue); }
+  .pv-choices .pv-choice:nth-child(2) .pv-letter{ background:var(--green); }
+  .pv-choices .pv-choice:nth-child(3) .pv-letter{ background:var(--amber); color:var(--navy); }
+  .pv-choices .pv-choice:nth-child(4) .pv-letter{ background:var(--purple); }
+  .pv-nav{ display:flex; align-items:center; justify-content:center; gap:2.4vw; padding-top:1.8vh; flex-shrink:0; }
+  .pv-btn{ background:var(--blue); color:#fff; border:none; border-radius:16px; padding:1.4vh 3.2vw;
+    font-size:clamp(20px,2.6vw,40px); font-weight:700; font-family:'Kanit'; cursor:pointer; }
+  .pv-btn.pv-exit{ background:#6b7280; }
+  .pv-btn:disabled{ opacity:.3; cursor:default; }
+
   /* results */
   table.res{ width:100%; border-collapse:collapse; font-size:13px;}
   table.res th, table.res td{ border:1px solid #dde2ec; padding:6px 8px; text-align:center;}
@@ -252,6 +281,7 @@
       <button class="act sm" onclick="changeQ(-1)">◀ ก่อน</button>
       <button class="act sm" onclick="changeQ(1)">ถัดไป ▶</button>
       <button class="act red sm" onclick="clearQ()">ล้างข้อนี้</button>
+      <button class="act purple" onclick="openPresent()">🔎 แสดงคำถามเต็มจอ</button>
       <button class="act green" onclick="finishTest()">✅ จบ/บันทึกผล</button>
       <span class="muted" id="scanStat">ยังไม่เปิดกล้อง</span>
     </div>
@@ -269,6 +299,24 @@
   <div class="panel">
     <h2>ตอบสด · ข้อ <span id="qnum2">๑</span> <span class="muted" id="answerCount"></span></h2>
     <div class="live-grid" id="liveGrid"></div>
+  </div>
+</div>
+
+<!-- ============ หน้าคำถามเต็มจอ (นำเสนอ) ============ -->
+<div id="presentOverlay">
+  <div class="pv-top">
+    <span class="pv-qnum">ข้อ <span id="pvQnum">๑</span>/<span id="pvQtotal">๑๐</span></span>
+    <span class="pv-mode" id="pvMode"></span>
+    <span class="pv-count" id="pvCount">ตอบแล้ว ๐/๐ คน</span>
+  </div>
+  <div class="pv-body">
+    <div class="pv-question" id="pvQuestion"></div>
+    <div class="pv-choices" id="pvChoices"></div>
+  </div>
+  <div class="pv-nav">
+    <button class="pv-btn" id="pvPrev" onclick="presentNav(-1)">◀ ก่อน</button>
+    <button class="pv-btn pv-exit" onclick="closePresent()">✕ ปิด</button>
+    <button class="pv-btn" id="pvNext" onclick="presentNav(1)">ถัดไป ▶</button>
   </div>
 </div>
 
@@ -742,7 +790,7 @@ function delQuestion(i){ if(confirm('ลบข้อ '+(i+1)+'?')){ state.questi
 function saveQuestions(){ const s=curSet(); if(s) s.name=state.qsetName; save(); renderSetSelector(); document.getElementById('qSaveStat').textContent='✅ บันทึกแล้ว ('+state.questions.length+' ข้อ)'; document.getElementById('qtotal').textContent=thaiNum(state.questions.length); }
 
 /* ===================== สอบ: แสดงโจทย์ + สแกน ===================== */
-function onModeChange(){ curMode=document.getElementById('modeSel').value; renderModeTag(); renderLiveGrid(); }
+function onModeChange(){ curMode=document.getElementById('modeSel').value; renderModeTag(); renderLiveGrid(); renderPresent(); }
 function renderModeTag(){ const t=document.getElementById('modeTag'); t.className='tag '+curMode; t.textContent= curMode==='pre'?'กำลังบันทึก: ก่อนเรียน':'กำลังบันทึก: หลังเรียน'; }
 function renderQShow(){
   const q=state.questions[curQ];
@@ -750,8 +798,56 @@ function renderQShow(){
   if(!q){ p.innerHTML='<div class="muted">ยังไม่มีคำถาม ไปที่แท็บ 📝 คำถาม</div>'; return; }
   let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{ ch+='<div class="ch"><b>'+L+'.</b> '+(q.choices[i]||'')+'</div>'; });
   p.innerHTML='<div class="qshow"><div class="qt">ข้อ '+thaiNum(curQ+1)+'. '+(q.text||'')+'</div>'+ch+'</div>';
+  renderPresent();
 }
 function ensureSess(){ const m=state.sessions[curMode]; return m; }
+
+/* ===== หน้าคำถามเต็มจอ (นำเสนอ) ===== */
+let presentOn=false;
+function openPresent(){
+  const ov=document.getElementById('presentOverlay');
+  ov.classList.add('on'); presentOn=true; renderPresent();
+  if(ov.requestFullscreen) ov.requestFullscreen().catch(()=>{});
+}
+function closePresent(){
+  const ov=document.getElementById('presentOverlay');
+  ov.classList.remove('on'); presentOn=false;
+  if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+}
+function presentNav(d){ changeQ(d); }   // changeQ → renderQShow → renderPresent
+function renderPresent(){
+  if(!presentOn) return;
+  const q=state.questions[curQ], total=state.questions.length;
+  document.getElementById('pvQnum').textContent=thaiNum(curQ+1);
+  document.getElementById('pvQtotal').textContent=thaiNum(total);
+  document.getElementById('pvMode').textContent= curMode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน';
+  const qEl=document.getElementById('pvQuestion'), cEl=document.getElementById('pvChoices');
+  if(!q){ qEl.textContent='ยังไม่มีคำถาม — ไปที่แท็บ 📝 คำถาม'; cEl.innerHTML=''; }
+  else{
+    qEl.textContent='ข้อ '+thaiNum(curQ+1)+'. '+(q.text||'');
+    let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{
+      ch+='<div class="pv-choice"><span class="pv-letter">'+L+'</span><span class="pv-txt">'+(q.choices[i]||'')+'</span></div>'; });
+    cEl.innerHTML=ch;
+  }
+  document.getElementById('pvPrev').disabled = curQ<=0;
+  document.getElementById('pvNext').disabled = curQ>=total-1;
+  updatePresentCount();
+}
+function updatePresentCount(){
+  if(!presentOn) return;
+  const sess=ensureSess(); let answered=0;
+  state.roster.forEach(s=>{ if(sess[s.id]&&sess[s.id][curQ])answered++; });
+  document.getElementById('pvCount').textContent='ตอบแล้ว '+thaiNum(answered)+'/'+thaiNum(state.roster.length)+' คน';
+}
+document.addEventListener('keydown',e=>{
+  if(!presentOn) return;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '){ presentNav(1); e.preventDefault(); }
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ presentNav(-1); e.preventDefault(); }
+  else if(e.key==='Escape'){ closePresent(); }
+});
+document.addEventListener('fullscreenchange',()=>{   // กด Esc/F11 ออกจากเต็มจอ → ปิด overlay ตาม
+  if(!document.fullscreenElement && presentOn){ document.getElementById('presentOverlay').classList.remove('on'); presentOn=false; }
+});
 
 const video=document.getElementById('video'),overlay=document.getElementById('overlay'),octx=overlay.getContext('2d');
 const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
@@ -817,6 +913,7 @@ function renderLiveGrid(){
   document.getElementById('qnum').textContent=thaiNum(curQ+1);
   document.getElementById('qnum2').textContent=thaiNum(curQ+1);
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
+  updatePresentCount();
 }
 function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
 async function finishTest(){
