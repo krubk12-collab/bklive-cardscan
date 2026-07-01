@@ -103,6 +103,20 @@
     font-size:clamp(20px,2.6vw,40px); font-weight:700; font-family:'Kanit'; cursor:pointer; }
   .pv-btn.pv-exit{ background:#6b7280; }
   .pv-btn:disabled{ opacity:.3; cursor:default; }
+  .pv-toggle{ font-family:'Kanit'; font-weight:700; font-size:clamp(14px,1.7vw,24px); border:none;
+    border-radius:12px; padding:.4em .9em; cursor:pointer; white-space:nowrap; }
+  .pv-toggle.on{ background:var(--green); color:#fff; }
+  .pv-toggle.off{ background:#4a5578; color:#cbd3ea; }
+  .pv-progress{ height:1.1vh; min-height:8px; background:rgba(255,255,255,.1); border-radius:99px;
+    margin-top:1.3vh; overflow:hidden; flex-shrink:0; }
+  .pv-progress-fill{ height:100%; width:0%; background:linear-gradient(90deg,var(--green),#7de3b0);
+    border-radius:99px; transition:width .3s ease; }
+  .pv-toast{ position:absolute; left:50%; bottom:12vh; transform:translateX(-50%); display:none;
+    align-items:center; gap:1.6vw; background:var(--green); color:#fff; font-family:'Kanit'; font-weight:700;
+    font-size:clamp(20px,2.7vw,42px); padding:1.1vh 2.6vw; border-radius:20px; box-shadow:0 12px 44px rgba(0,0,0,.45); }
+  .pv-toast.show{ display:flex; }
+  .pv-toast button{ background:rgba(255,255,255,.25); color:#fff; border:none; border-radius:12px;
+    font-family:'Kanit'; font-weight:700; font-size:.72em; padding:.4em 1.1em; cursor:pointer; }
 
   /* results */
   table.res{ width:100%; border-collapse:collapse; font-size:13px;}
@@ -307,8 +321,10 @@
   <div class="pv-top">
     <span class="pv-qnum">ข้อ <span id="pvQnum">๑</span>/<span id="pvQtotal">๑๐</span></span>
     <span class="pv-mode" id="pvMode"></span>
+    <button class="pv-toggle on" id="pvAuto" onclick="toggleAuto()">⏭️ เลื่อนอัตโนมัติ: เปิด</button>
     <span class="pv-count" id="pvCount">ตอบแล้ว ๐/๐ คน</span>
   </div>
+  <div class="pv-progress"><div class="pv-progress-fill" id="pvBar"></div></div>
   <div class="pv-body">
     <div class="pv-question" id="pvQuestion"></div>
     <div class="pv-choices" id="pvChoices"></div>
@@ -318,6 +334,7 @@
     <button class="pv-btn pv-exit" onclick="closePresent()">✕ ปิด</button>
     <button class="pv-btn" id="pvNext" onclick="presentNav(1)">ถัดไป ▶</button>
   </div>
+  <div class="pv-toast" id="pvToast"></div>
 </div>
 
 <!-- ============ QUESTIONS ============ -->
@@ -803,20 +820,29 @@ function renderQShow(){
 function ensureSess(){ const m=state.sessions[curMode]; return m; }
 
 /* ===== หน้าคำถามเต็มจอ (นำเสนอ) ===== */
-let presentOn=false;
+let presentOn=false, autoAdvance=true, advTimer=null, advCountId=null, advForQ=-1, beepedForQ=-1;
 function openPresent(){
   const ov=document.getElementById('presentOverlay');
-  ov.classList.add('on'); presentOn=true; renderPresent();
+  ov.classList.add('on'); presentOn=true; advForQ=-1; beepedForQ=-1; renderPresent();
   if(ov.requestFullscreen) ov.requestFullscreen().catch(()=>{});
 }
 function closePresent(){
+  cancelAutoAdv();
   const ov=document.getElementById('presentOverlay');
   ov.classList.remove('on'); presentOn=false;
   if(document.fullscreenElement) document.exitFullscreen().catch(()=>{});
 }
 function presentNav(d){ changeQ(d); }   // changeQ → renderQShow → renderPresent
+function toggleAuto(){
+  autoAdvance=!autoAdvance;
+  const b=document.getElementById('pvAuto');
+  b.className='pv-toggle '+(autoAdvance?'on':'off');
+  b.textContent='⏭️ เลื่อนอัตโนมัติ: '+(autoAdvance?'เปิด':'ปิด');
+  if(!autoAdvance) cancelAutoAdv();
+}
 function renderPresent(){
   if(!presentOn) return;
+  cancelAutoAdv();                       // เปลี่ยนข้อ → ยกเลิกนับถอยหลังค้าง
   const q=state.questions[curQ], total=state.questions.length;
   document.getElementById('pvQnum').textContent=thaiNum(curQ+1);
   document.getElementById('pvQtotal').textContent=thaiNum(total);
@@ -835,9 +861,41 @@ function renderPresent(){
 }
 function updatePresentCount(){
   if(!presentOn) return;
-  const sess=ensureSess(); let answered=0;
+  const sess=ensureSess(), total=state.roster.length; let answered=0;
   state.roster.forEach(s=>{ if(sess[s.id]&&sess[s.id][curQ])answered++; });
-  document.getElementById('pvCount').textContent='ตอบแล้ว '+thaiNum(answered)+'/'+thaiNum(state.roster.length)+' คน';
+  document.getElementById('pvCount').textContent='ตอบแล้ว '+thaiNum(answered)+'/'+thaiNum(total)+' คน';
+  document.getElementById('pvBar').style.width=(total?Math.round(answered/total*100):0)+'%';
+  // ตอบครบทุกคน — บี๊บ + เลื่อนอัตโนมัติ (เฉพาะตอนเปิดกล้องสแกนอยู่ กันรัวข้ามข้อที่ตอบไว้แล้ว)
+  if(total>0 && answered>=total && running){
+    if(beepedForQ!==curQ){ beepedForQ=curQ; presentBeep(); }
+    if(autoAdvance && advForQ!==curQ){
+      advForQ=curQ;
+      if(curQ < state.questions.length-1) scheduleAutoAdv();
+      else showToast('🎉 ตอบครบทุกคนแล้ว — ข้อสุดท้าย!');
+    }
+  }
+}
+function scheduleAutoAdv(){
+  cancelAutoAdv();
+  let sec=3; const t=document.getElementById('pvToast');
+  const draw=()=>{ t.innerHTML='✓ ตอบครบแล้ว — ไปข้อถัดไปใน '+thaiNum(sec)+' <button onclick="cancelAutoAdv()">อยู่ต่อ</button>'; };
+  draw(); t.classList.add('show');
+  advCountId=setInterval(()=>{ sec--; if(sec>0) draw(); },1000);
+  advTimer=setTimeout(()=>{ cancelAutoAdv(); presentNav(1); },3000);
+}
+function cancelAutoAdv(){
+  if(advTimer){ clearTimeout(advTimer); advTimer=null; }
+  if(advCountId){ clearInterval(advCountId); advCountId=null; }
+  const t=document.getElementById('pvToast'); if(t) t.classList.remove('show');
+}
+function showToast(msg){ const t=document.getElementById('pvToast'); t.textContent=msg; t.classList.add('show'); }
+function presentBeep(){
+  try{ const a=new (window.AudioContext||window.webkitAudioContext)();
+    const o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination);
+    o.type='sine'; o.frequency.value=880; g.gain.setValueAtTime(.2,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,a.currentTime+.4); o.start(); o.stop(a.currentTime+.4);
+    setTimeout(()=>a.close(),600);
+  }catch(e){}
 }
 document.addEventListener('keydown',e=>{
   if(!presentOn) return;
