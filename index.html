@@ -176,7 +176,7 @@
   .pcard .c-tl{top:4mm;left:5mm;} .pcard .c-tr{top:4mm;right:5mm;}
   .pcard .c-bl{bottom:4mm;left:5mm;transform:rotate(180deg);} .pcard .c-br{bottom:4mm;right:5mm;transform:rotate(180deg);}
   .pcard .marker-area{ flex:1; display:flex; align-items:center; justify-content:center; position:relative;}
-  .pcard .marker-area svg{ width:62%; height:auto;}
+  .pcard .marker-area svg{ width:86%; height:auto;}   /* marker ใหญ่เกือบชนตัวอักษร ก/ข/ค/ง — สแกนติดไกลขึ้น */
   .pcard .side{ position:absolute; font-family:'Kanit'; font-weight:800; font-size:28px; color:#111;}
   .pcard .s-top{top:7mm;left:50%;transform:translateX(-50%);}
   .pcard .s-bottom{bottom:7mm;left:50%;transform:translateX(-50%) rotate(180deg);}
@@ -341,6 +341,7 @@
       <button class="act sm" onclick="changeQ(-1)">◀ ก่อน</button>
       <button class="act sm" onclick="changeQ(1)">ถัดไป ▶</button>
       <button class="act red sm" onclick="clearQ()">ล้างข้อนี้</button>
+      <label style="white-space:nowrap;"><input type="checkbox" id="scanSound" checked> 🔊 เสียงสแกนติด</label>
       <button class="act purple" onclick="openPresent()">🔎 แสดงคำถามเต็มจอ</button>
       <button class="act green" onclick="finishTest()">✅ จบ/บันทึกผล</button>
       <span class="muted" id="scanStat">ยังไม่เปิดกล้อง</span>
@@ -601,6 +602,14 @@
     </div>
   </div>
   <div class="panel">
+    <h2>📋 ข้อมูลระบบ &amp; การใช้งาน</h2>
+    <div class="row" style="margin-bottom:8px;">
+      <button class="act sm" onclick="loadSysinfo(this)">🔄 โหลดข้อมูล</button>
+      <button class="act green sm" id="sheetLinkBtn" style="display:none;" onclick="window.open(this.dataset.url,'_blank')">📄 เปิด Google Sheet ที่ใช้งาน</button>
+    </div>
+    <div id="sysinfoBox" class="muted">กด "โหลดข้อมูล" เพื่อดูชีตที่ใช้เก็บข้อมูล · ครูที่เข้าใช้ระบบแล้ว · log การใช้งานล่าสุด</div>
+  </div>
+  <div class="panel">
     <h2>🗑️ ข้อมูล</h2>
     <div class="row">
       <button class="act red sm" onclick="resetSessions()">ล้างผลสอบทั้งหมด (เก็บคำถาม/รายชื่อ)</button>
@@ -751,7 +760,16 @@ function defaultQuestionSet(){
 }
 
 /* ===================== แท็บ ===================== */
+const SET_PASS='@021916103';   // รหัสเข้าหน้าตั้งค่า (กันมือใหม่กดเปลี่ยนค่าโดยไม่ตั้งใจ)
+let setUnlocked=false;
 function showView(v){
+  if(v==='set' && !setUnlocked){
+    const p=prompt('🔒 หน้าตั้งค่าถูกล็อก — ใส่รหัสผ่าน:');
+    if(p===null) return;
+    if(p.trim()!==SET_PASS){ alert('รหัสผ่านไม่ถูกต้อง'); return; }
+    setUnlocked=true;   // จำไว้จนกว่าจะปิด/รีเฟรชหน้า
+    setTimeout(()=>loadSysinfo(),50);   // ปลดล็อกแล้วโหลดข้อมูลระบบให้เลย
+  }
   ['test','q','res','live','gen','timer','set'].forEach(x=>{
     const vw=document.getElementById(x+'View'); if(vw) vw.classList.toggle('active', x===v);
     const tb=document.getElementById('t_'+x); if(tb) tb.classList.toggle('active', x===v);
@@ -954,6 +972,7 @@ function confirmTeacher(){
   const ts=document.getElementById('teacherSel'); if(ts && [...ts.options].some(o=>o.value===v)) ts.value=v;
   document.getElementById('gate').style.display='none';
   cloudSync();           // ดึง/รวมชุดข้อสอบล่าสุดจากคลาวด์ทันทีที่เลือกครู (เงียบๆ ถ้าออฟไลน์)
+  logUsage('เข้าใช้งาน');   // ลง log ติดตามการใช้งาน (ดูได้ที่ ⚙️ ตั้งค่า)
   if(!localStorage.getItem('cardscan_helpseen')) showHelp();   // ใช้เครื่องนี้ครั้งแรก → โชว์วิธีใช้ 1 นาที
 }
 function refreshAfterTeacher(){
@@ -1214,9 +1233,25 @@ const video=document.getElementById('video'),overlay=document.getElementById('ov
 const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
 let stream=null,running=false,lastDetect=0;
 
+/* ---- เสียง "ปิ๊ง" เมื่อสแกนติด (บันทึกคำตอบใหม่สำเร็จ) ---- */
+let scanAC=null,lastBeepAt=0;
+function scanBeep(){
+  const cb=document.getElementById('scanSound'); if(cb&&!cb.checked) return;
+  const now=performance.now(); if(now-lastBeepAt<140) return; lastBeepAt=now;   // กันเสียงรัวจนหูชา
+  try{
+    if(!scanAC) scanAC=new (window.AudioContext||window.webkitAudioContext)();
+    if(scanAC.state==='suspended') scanAC.resume();
+    const t=scanAC.currentTime, o=scanAC.createOscillator(), g=scanAC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(1318,t); o.frequency.setValueAtTime(1760,t+0.055);   // ปิ๊ง-ปิ๊ง ขึ้นเสียงสูง ฟังชัดในห้องเรียน
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+    o.connect(g).connect(scanAC.destination); o.start(t); o.stop(t+0.17);
+  }catch(e){}
+}
+
 async function startCam(){
   if(!state.roster || !state.roster.length) state.roster=getRosterFromInput();
   save(); renderLiveGrid();
+  try{ if(!scanAC) scanAC=new (window.AudioContext||window.webkitAudioContext)(); if(scanAC.state==='suspended') scanAC.resume(); }catch(e){}   // ปลดล็อกเสียงจากการคลิก
   document.getElementById('scanStat').innerHTML=spin('กำลังเปิดกล้อง...');
   try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:960}},audio:false}); }
   catch(e){ document.getElementById('scanStat').textContent='❌ เปิดกล้องไม่ได้: '+e.message+' (ต้องเปิดผ่าน https)'; return; }
@@ -1244,7 +1279,7 @@ function loop(){
     if(stu){ if(!sess[m.id])sess[m.id]={}; if(sess[m.id][curQ]!==ans){ sess[m.id][curQ]=ans; recorded=true; } }
     drawMarker(m.corners,m.id,ans,!!stu);
   });
-  if(recorded) touchCur();   // มีคำตอบใหม่ → ประทับเวลาไว้ให้ระบบซิงค์
+  if(recorded){ touchCur(); scanBeep(); }   // มีคำตอบใหม่ → ประทับเวลาให้ระบบซิงค์ + เสียงปิ๊งบอกว่าสแกนติดแล้ว
   document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
   renderLiveGrid();
   pushLive();
@@ -1744,6 +1779,42 @@ function timerToggleFull(){
   const st=document.getElementById('timerStage');
   if(!document.fullscreenElement){ (st.requestFullscreen?st.requestFullscreen():Promise.reject()).catch(()=>st.classList.toggle('full')); }
   else { document.exitFullscreen(); }
+}
+
+/* ===================== 📋 ข้อมูลระบบ & log (หน้าตั้งค่า) ===================== */
+async function loadSysinfo(btn){
+  const box=document.getElementById('sysinfoBox'); if(!box) return;
+  btnBusy(btn,true);
+  box.innerHTML=spin('กำลังโหลดข้อมูลระบบจาก Google Sheets...');
+  try{
+    const res=await fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'sysinfo'})});
+    const j=await res.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||'โหลดไม่สำเร็จ');
+    const lb=document.getElementById('sheetLinkBtn');
+    if(j.url&&lb){ lb.style.display=''; lb.dataset.url=j.url; }
+    let html='<h3 style="margin:4px 0 6px;">👩‍🏫 ครูที่เข้าใช้งานระบบแล้ว ('+(j.teachers||[]).length+' คน)</h3>';
+    if((j.teachers||[]).length){
+      html+='<div style="overflow-x:auto;"><table class="res" style="min-width:420px;"><thead><tr><th>ครู</th><th>ชุดข้อสอบ</th><th>ซิงค์ล่าสุด</th></tr></thead><tbody>';
+      j.teachers.forEach(t=>{ html+='<tr><td class="name">'+esc(t.name)+'</td><td>'+t.sets+' ชุด</td><td>'+esc(t.last)+'</td></tr>'; });
+      html+='</tbody></table></div>';
+    } else html+='<p class="muted">ยังไม่มีครูซิงค์ข้อมูลเข้ามา</p>';
+    html+='<h3 style="margin:12px 0 6px;">📋 Log การใช้งานล่าสุด ('+(j.logs||[]).length+' รายการ)</h3>';
+    if((j.logs||[]).length){
+      html+='<div style="overflow-x:auto;"><table class="res" style="min-width:480px;"><thead><tr><th>เวลา</th><th>ครู</th><th>เหตุการณ์</th><th>อุปกรณ์</th></tr></thead><tbody>';
+      j.logs.forEach(l=>{ html+='<tr><td>'+esc(l.time)+'</td><td class="name">'+esc(l.teacher)+'</td><td>'+esc(l.event)+'</td><td class="name" style="font-size:11.5px;color:#888;">'+esc((l.ua||'').slice(0,60))+'</td></tr>'; });
+      html+='</tbody></table></div>';
+    } else html+='<p class="muted">ยังไม่มี log</p>';
+    box.innerHTML=html;
+  }catch(e){
+    box.innerHTML='⚠️ โหลดไม่ได้: '+esc(e.message)+' — ถ้าเพิ่งอัปเดตระบบ ต้อง Deploy Apps Script เวอร์ชันใหม่ก่อน';
+  }
+  btnBusy(btn,false);
+}
+function logUsage(event){   // บันทึกการใช้งานลงชีต (เงียบๆ ไม่บล็อกการทำงาน)
+  if(!state.gasUrl) return;
+  const ua=(navigator.userAgent.match(/Android|iPhone|iPad|Windows|Macintosh/)||['?'])[0]+' · '+(navigator.userAgent.match(/Chrome\/[\d.]+|Safari\/[\d.]+|Edg\/[\d.]+/)||[''])[0];
+  try{ fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'log',teacher:state.teacherName||'',event:event||'',ua})}).catch(()=>{}); }catch(e){}
 }
 
 /* ===================== ❓ วิธีใช้งานใน 1 นาที ===================== */
