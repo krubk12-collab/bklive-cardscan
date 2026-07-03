@@ -1571,8 +1571,9 @@ function buildCards(){
   save();
   applyCardLayout();
   const wrap=document.getElementById('genCards'); wrap.innerHTML='';
+  const vb=dict.markSize+2;   // SVG จากไลบรารีมีขอบขาว 1 โมดูลรอบตัว — crop ออก ใช้กระดาษขาวของการ์ดเป็น quiet zone แทน
   state.roster.forEach(stu=>{
-    const svg=dict.generateSVG(stu.id), num=thaiNum(stu.id);
+    const svg=dict.generateSVG(stu.id).replace('viewBox="0 0 '+vb+' '+vb+'"','viewBox="1 1 '+(vb-2)+' '+(vb-2)+'"'), num=thaiNum(stu.id);
     const card=document.createElement('div'); card.className='pcard';
     card.innerHTML='<div class="corner c-tl">'+num+'</div><div class="corner c-tr">'+num+'</div>'+
       '<div class="corner c-bl">'+num+'</div><div class="corner c-br">'+num+'</div>'+
