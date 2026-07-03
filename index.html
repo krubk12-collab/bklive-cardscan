@@ -55,6 +55,17 @@
   #gate select{ width:100%; font-size:17px; padding:11px; margin-top:8px;}
   #teacherBadge{ cursor:pointer; background:rgba(255,255,255,.16); padding:5px 11px; border-radius:8px; font-size:13px; font-weight:600;}
 
+  /* แถบชุดข้อสอบปัจจุบัน + สถานะซิงค์ (ติดใน header — เห็นทุกแท็บ) */
+  #setBar{ flex-basis:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:rgba(255,255,255,.09); border-radius:9px; padding:5px 10px; font-size:13px; }
+  #setBar .sb-lab{ font-weight:700; white-space:nowrap; color:#ffd98a; }
+  #setBar select{ flex:1; min-width:140px; max-width:430px; padding:4px 8px; font-size:13px;
+    border-radius:6px; border:none; font-weight:600; color:var(--navy); }
+  #syncStat{ margin-left:auto; cursor:pointer; white-space:nowrap; font-weight:600; font-size:12.5px;
+    padding:3px 10px; border-radius:14px; background:rgba(255,255,255,.13); color:#dfe6f5; }
+  #syncStat.ok{ color:#7de3b0; } #syncStat.busy,#syncStat.pending{ color:#ffd98a; }
+  #syncStat.err,#syncStat.off{ color:#ff9aa5; }
+
   /* questions */
   .q-item{ border:1.5px solid #e1e5ee; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
   .q-item .qhead{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
@@ -269,6 +280,11 @@
     <button id="t_timer" onclick="showView('timer')">⏱️ จับเวลา</button>
     <button id="t_set" onclick="showView('set')">⚙️ ตั้งค่า</button>
   </div>
+  <div id="setBar" class="no-print">
+    <span class="sb-lab">📚 ชุดข้อสอบที่ใช้อยู่:</span>
+    <select id="setBarSel" onchange="onSetChange(this.value)" title="สลับชุดข้อสอบได้จากทุกแท็บ"></select>
+    <span id="syncStat" onclick="cloudSync(true)" title="คลิกเพื่อซิงค์ข้อสอบกับคลาวด์เดี๋ยวนี้">☁️ …</span>
+  </div>
 </header>
 
 <!-- ============ TEST / SCAN ============ -->
@@ -430,10 +446,32 @@
       <label>📥 ดึงจากระบบโรงเรียน:</label>
       <select id="classSel"><option>— กดโหลดห้องก่อน —</option></select>
       <button class="act sm" onclick="loadClasses()">โหลดห้อง</button>
-      <button class="act green sm" onclick="loadStudents()">ดึงรายชื่อนักเรียน</button>
+      <button class="act green sm" onclick="loadStudents()">ดึงรายชื่อ (เลือกรายคนได้)</button>
     </div>
-    <p class="muted">หรือพิมพ์รายชื่อเองทีละบรรทัด (เลขที่ไล่ ๑,๒,๓...) · การ์ดใบที่ N ใช้รหัส N · นักเรียนพลิกให้ตัวอักษร (ก/ข/ค/ง) ที่ตอบอยู่ "ด้านบน"</p>
-    <textarea id="roster" rows="5" style="width:100%;" placeholder="เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;..." oninput="rosterChanged()"></textarea>
+    <div id="pickPanel" style="display:none; background:#fffaf0; border:1.5px solid var(--amber); border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+      <div class="row" style="margin-bottom:6px;">
+        <b>☑️ ติ๊กเลือกนักเรียนที่จะใช้</b> <span class="muted" id="pickCount"></span>
+        <button class="act sm" onclick="pickAll(true)" style="margin-left:auto;">เลือกทั้งหมด</button>
+        <button class="act gray sm" onclick="pickAll(false)">ไม่เลือกเลย</button>
+      </div>
+      <div id="pickGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:4px; max-height:260px; overflow:auto;"></div>
+      <div class="row" style="margin-top:8px;">
+        <button class="act green sm" onclick="applyPick(false)">✅ ใช้รายชื่อที่เลือก</button>
+        <button class="act purple sm" onclick="applyPick(true)">💾 ใช้ + บันทึกเป็นกลุ่ม</button>
+        <button class="act gray sm" onclick="document.getElementById('pickPanel').style.display='none'">✖ ปิด</button>
+        <span class="muted">เลขที่บนการ์ดจะตรงกับเลขที่จริงของนักเรียน</span>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:8px; background:#f4effe; padding:8px; border-radius:8px;">
+      <label>👥 กลุ่มที่บันทึกไว้:</label>
+      <select id="groupSel" style="min-width:180px;"><option value="">— ยังไม่มีกลุ่ม —</option></select>
+      <button class="act sm" onclick="useGroupUI()">ใช้กลุ่มนี้</button>
+      <button class="act green sm" onclick="saveGroupUI()">💾 บันทึกรายชื่อปัจจุบันเป็นกลุ่ม</button>
+      <button class="act red sm" onclick="delGroupUI()">🗑️ ลบกลุ่ม</button>
+      <span class="muted">กลุ่มซิงค์ข้ามเครื่องอัตโนมัติ ☁️</span>
+    </div>
+    <p class="muted">หรือพิมพ์รายชื่อเองทีละบรรทัด (พิมพ์ "ชื่อ" เลขที่ไล่ ๑,๒,๓... หรือระบุเลขที่เอง "7. ชื่อ") · การ์ดใบที่ N ใช้รหัส N · นักเรียนพลิกให้ตัวอักษร (ก/ข/ค/ง) ที่ตอบอยู่ "ด้านบน"</p>
+    <textarea id="roster" rows="5" style="width:100%;" placeholder="เด็กชายเอ ใจดี&#10;เด็กหญิงบี เก่งมาก&#10;หรือระบุเลขที่เอง เช่น 7. เด็กชายซี ขยันเรียน&#10;..." oninput="rosterChanged()"></textarea>
     <div class="row" style="margin-top:8px;">
       <label>จำนวน (ถ้าไม่ใส่ชื่อ): <input type="number" id="genCount" value="25" min="1" max="250" style="width:70px;"></label>
       <label>ขนาด:
@@ -551,19 +589,22 @@ let state={
   // settings (ต่อเครื่อง)
   gasUrl:'', roomCode:'bk1', teacherName:'',
   // ของครูปัจจุบัน
-  roster:[], sets:[], currentSetId:'',
+  roster:[], rosterUpdatedAt:0, groups:[], groupsUpdatedAt:0, sets:[], currentSetId:'',
   // live views ชี้ไปยังชุดข้อสอบปัจจุบัน (ตั้งโดย selectSet)
   qsetName:'', questions:[], sessions:{ pre:{}, post:{} }
 };
 let curMode='pre', curQ=0;
 
 function thaiNum(n){ return String(n).replace(/[0-9]/g,d=>'๐๑๒๓๔๕๖๗๘๙'[d]); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 /* ===================== โหลด/บันทึก (settings + bundle ต่อครู) ===================== */
 function roomHashKey(s){ let h=0; for(let i=0;i<(s||'').length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h.toString(36); }
 function tkey(){ return 'cardscan_t_'+roomHashKey(state.teacherName||'default'); }
-function newSet(name){ return {id:'s'+Date.now()+Math.floor(Math.random()*1000), name:name||'ชุดข้อสอบใหม่', questions:[], sessions:{pre:{},post:{}}}; }
-function curSet(){ return state.sets.find(s=>s.id===state.currentSetId) || state.sets[0]; }
+function newSet(name){ return {id:'s'+Date.now()+Math.floor(Math.random()*1000), name:name||'ชุดข้อสอบใหม่', questions:[], sessions:{pre:{},post:{}}, updatedAt:Date.now()}; }
+function liveSets(){ return state.sets.filter(s=>!s.deleted); }   // ชุดที่ยังไม่ถูกลบ (tombstone เก็บไว้ให้ซิงค์การลบข้ามเครื่อง)
+function curSet(){ const s=state.sets.find(x=>x.id===state.currentSetId); return (s&&!s.deleted)?s:liveSets()[0]; }
+function touchCur(){ const s=curSet(); if(s) s.updatedAt=Date.now(); }   // ประทับเวลาแก้ไข ใช้ตัดสิน merge ตอนซิงค์
 function selectSet(id){
   if(id) state.currentSetId=id;
   let s=curSet(); if(!s){ s=newSet('ชุดข้อสอบ 1'); state.sets.push(s); }
@@ -572,10 +613,15 @@ function selectSet(id){
   state.questions=s.questions; state.qsetName=s.name; state.sessions=s.sessions;  // live views (อ้างอิงเดียวกัน)
   curQ=0;
 }
+let storageWarned=false;
 function save(){
-  localStorage.setItem(LS, JSON.stringify({teacherName:state.teacherName, gasUrl:state.gasUrl, roomCode:state.roomCode, cardPerPage:state.cardPerPage}));
-  const s=curSet(); if(s){ s.name=state.qsetName; }   // sync ชื่อชุด (questions/sessions เป็น ref เดียวกันอยู่แล้ว)
-  if(state.teacherName) localStorage.setItem(tkey(), JSON.stringify({roster:state.roster, currentSetId:state.currentSetId, sets:state.sets}));
+  try{
+    localStorage.setItem(LS, JSON.stringify({teacherName:state.teacherName, gasUrl:state.gasUrl, roomCode:state.roomCode, cardPerPage:state.cardPerPage}));
+    const s=curSet(); if(s){ s.name=state.qsetName; }   // sync ชื่อชุด (questions/sessions เป็น ref เดียวกันอยู่แล้ว)
+    if(state.teacherName) localStorage.setItem(tkey(), JSON.stringify({roster:state.roster, rosterUpdatedAt:state.rosterUpdatedAt||0, groups:state.groups, groupsUpdatedAt:state.groupsUpdatedAt||0, currentSetId:state.currentSetId, sets:state.sets}));
+  }catch(e){   // localStorage เต็ม/ถูกปิด — เตือนครั้งเดียว ข้อมูลยังอยู่ใน memory + คลาวด์
+    if(!storageWarned){ storageWarned=true; alert('⚠️ บันทึกลงเครื่องไม่ได้ (พื้นที่เบราว์เซอร์เต็มหรือถูกปิดใช้งาน)\nข้อมูลจะถูกเก็บบนคลาวด์แทนเมื่อซิงค์สำเร็จ'); }
+  }
 }
 function load(){
   const raw=localStorage.getItem(LS);
@@ -586,9 +632,19 @@ function load(){
   loadBundle();
 }
 function loadBundle(){
-  state.roster=[]; state.sets=[]; state.currentSetId='';
+  state.roster=[]; state.rosterUpdatedAt=0; state.groups=[]; state.groupsUpdatedAt=0; state.sets=[]; state.currentSetId='';
   const raw=localStorage.getItem(tkey());
-  if(raw){ try{ const b=JSON.parse(raw); state.roster=b.roster||[]; if(b.sets&&b.sets.length){ state.sets=b.sets; state.currentSetId=b.currentSetId||b.sets[0].id; selectSet(state.currentSetId); return; } }catch(e){} }
+  if(raw){ try{ const b=JSON.parse(raw);
+    state.roster=b.roster||[]; state.rosterUpdatedAt=b.rosterUpdatedAt||0;
+    state.groups=b.groups||[]; state.groupsUpdatedAt=b.groupsUpdatedAt||0;
+    if(state.groups.length && !state.groupsUpdatedAt) state.groupsUpdatedAt=1;
+    if(state.roster.length && !state.rosterUpdatedAt) state.rosterUpdatedAt=1;   // ข้อมูลเก่าก่อนมีระบบซิงค์ → ให้ขึ้นคลาวด์ครั้งแรกได้
+    if(b.sets&&b.sets.length){
+      state.sets=b.sets;
+      state.sets.forEach(s=>{ if(!s.updatedAt) s.updatedAt=1; });   // ชุดเก่าก่อนมีระบบซิงค์
+      if(liveSets().length){ state.currentSetId=b.currentSetId||liveSets()[0].id; selectSet(state.currentSetId); return; }
+    }
+  }catch(e){} }
   // ครั้งแรกของครูคนนี้
   if(state.teacherName==='ครู ณัฏฐจิรา ทองงาม'){ const d=defaultQuestionSet(); const s=newSet(d.name); s.questions=d.questions; state.sets=[s]; }
   else { state.sets=[ newSet('ชุดข้อสอบ 1') ]; }
@@ -637,9 +693,18 @@ function printView(id){
 function getRosterFromInput(){
   let lines=document.getElementById('roster').value.split('\n').map(s=>s.trim()).filter(Boolean);
   if(lines.length===0){ let n=parseInt(document.getElementById('genCount').value)||25; return Array.from({length:n},(_,i)=>({id:i+1,name:''})); }
-  return lines.map((name,i)=>({id:i+1,name}));
+  return lines.map((line,i)=>{   // รองรับ "7. ชื่อ" (กำหนดเลขที่เอง — ใช้กับกลุ่มที่เลือกบางคน) หรือ "ชื่อ" (ไล่ 1,2,3...)
+    const m=line.match(/^([0-9๐-๙]+)\s*[.)]\s*(.+)$/);
+    if(m){ const id=parseInt(m[1].replace(/[๐-๙]/g,d=>'๐๑๒๓๔๕๖๗๘๙'.indexOf(d)))||i+1; return {id,name:m[2].trim()}; }
+    return {id:i+1,name:line};
+  });
 }
-function rosterChanged(){ state.roster=getRosterFromInput(); save(); renderLiveGrid(); }
+function rosterToText(r){   // เขียนกลับลงช่องรายชื่อ: ถ้าเลขที่ไล่ 1..n ปกติ แสดงแค่ชื่อ · ถ้าเป็นกลุ่มบางคน แสดง "เลขที่. ชื่อ" กันเลขเพี้ยน
+  const named=r.filter(s=>s.name);
+  const seq=named.length===r.length && r.every((s,i)=>s.id===i+1);
+  return named.map(s=>seq?s.name:(s.id+'. '+s.name)).join('\n');
+}
+function rosterChanged(){ state.roster=getRosterFromInput(); state.rosterUpdatedAt=Date.now(); save(); renderLiveGrid(); markDirty(); }
 
 /* ===================== ดึงข้อมูลจากระบบโรงเรียน (JSONP) ===================== */
 function jsonp(params){
@@ -663,17 +728,84 @@ async function loadClasses(){
     sel.innerHTML='<option value="">— เลือกห้อง —</option>'+cls.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
   }catch(e){ sel.innerHTML='<option>โหลดไม่ได้ ('+e+')</option>'; }
 }
+let pickList=[];
 async function loadStudents(){
   const cid=document.getElementById('classSel').value;
   if(!cid){ alert('เลือกห้องก่อนครับ (กดโหลดห้อง แล้วเลือก)'); return; }
   try{
     const stu=await jsonp({action:'students',class:cid});
     if(!stu||!stu.length){ alert('ไม่พบนักเรียนในห้องนี้'); return; }
-    state.roster=stu.map(s=>({id:s.number,name:s.name}));
-    document.getElementById('roster').value=state.roster.map(s=>s.name).join('\n');
-    save(); buildCards(); renderLiveGrid();
-    alert('✅ ดึงรายชื่อ '+state.roster.length+' คนแล้ว (เลขที่ตรงกับระบบโรงเรียน)');
+    pickList=stu.map(s=>({id:s.number,name:s.name}));
+    renderPickPanel();
   }catch(e){ alert('ดึงรายชื่อไม่ได้: '+e); }
+}
+/* ---- ติ๊กเลือกนักเรียนรายคน (ไม่ต้องเอาทั้งห้อง) ---- */
+function renderPickPanel(){
+  const grid=document.getElementById('pickGrid');
+  grid.innerHTML=pickList.map((s,i)=>'<label style="display:flex;gap:6px;align-items:center;font-size:13.5px;cursor:pointer;">'+
+    '<input type="checkbox" data-i="'+i+'" checked onchange="updatePickCount()"> '+
+    '<span style="color:#888;">'+s.id+'.</span> '+esc(s.name)+'</label>').join('');
+  document.getElementById('pickPanel').style.display='block';
+  updatePickCount();
+}
+function pickAll(v){ document.querySelectorAll('#pickGrid input').forEach(cb=>cb.checked=v); updatePickCount(); }
+function updatePickCount(){
+  const n=document.querySelectorAll('#pickGrid input:checked').length;
+  document.getElementById('pickCount').textContent='เลือกแล้ว '+n+'/'+pickList.length+' คน';
+}
+function applyPick(alsoSaveGroup){
+  const chosen=[...document.querySelectorAll('#pickGrid input:checked')].map(cb=>pickList[+cb.dataset.i]);
+  if(!chosen.length){ alert('ยังไม่ได้ติ๊กเลือกนักเรียนเลยครับ'); return; }
+  state.roster=chosen.map(s=>({id:s.id,name:s.name}));   // คงเลขที่จริง — การ์ดใบเดิมของนักเรียนใช้ได้เลย
+  state.rosterUpdatedAt=Date.now();
+  document.getElementById('roster').value=rosterToText(state.roster);
+  save(); buildCards(); renderLiveGrid(); markDirty();
+  document.getElementById('pickPanel').style.display='none';
+  if(alsoSaveGroup) saveGroupUI();
+  else alert('✅ ใช้รายชื่อ '+state.roster.length+' คนแล้ว (เลขที่ตรงกับระบบโรงเรียน)');
+}
+/* ---- กลุ่มนักเรียนที่บันทึกไว้ (ต่อครู · ซิงค์ข้ามเครื่อง) ---- */
+function renderGroupSelector(){
+  const sel=document.getElementById('groupSel'); if(!sel) return;
+  sel.innerHTML=state.groups.length
+    ? state.groups.map(g=>'<option value="'+g.id+'">'+esc(g.name)+' ('+(g.students||[]).length+' คน)</option>').join('')
+    : '<option value="">— ยังไม่มีกลุ่ม —</option>';
+}
+function saveGroupUI(){
+  const named=state.roster.filter(s=>s.name);
+  if(!named.length){ alert('ยังไม่มีรายชื่อนักเรียนให้บันทึก — ดึงจากระบบโรงเรียนหรือพิมพ์ชื่อก่อนครับ'); return; }
+  const name=prompt('ตั้งชื่อกลุ่มนี้ (เช่น "ม.1/2 กลุ่มเสริม"):','กลุ่ม '+(state.groups.length+1));
+  if(name===null) return;
+  const nm=name.trim()||('กลุ่ม '+(state.groups.length+1));
+  const students=state.roster.map(s=>({id:s.id,name:s.name}));
+  const existing=state.groups.find(g=>g.name===nm);
+  if(existing){
+    if(!confirm('มีกลุ่มชื่อ "'+nm+'" อยู่แล้ว — บันทึกทับด้วยรายชื่อปัจจุบัน?')) return;
+    existing.students=students;
+  } else state.groups.push({id:'g'+Date.now()+Math.floor(Math.random()*1000), name:nm, students});
+  state.groupsUpdatedAt=Date.now();
+  save(); renderGroupSelector(); markDirty();
+  const sel=document.getElementById('groupSel'); const g=state.groups.find(x=>x.name===nm); if(sel&&g) sel.value=g.id;
+  alert('💾 บันทึกกลุ่ม "'+nm+'" ('+students.length+' คน) แล้ว — เปิดเครื่องไหนก็ดึงกลุ่มนี้ได้เลย ☁️');
+}
+function useGroupUI(){
+  const id=document.getElementById('groupSel').value;
+  const g=state.groups.find(x=>x.id===id);
+  if(!g){ alert('ยังไม่มีกลุ่มให้เลือก — บันทึกกลุ่มก่อนครับ'); return; }
+  state.roster=(g.students||[]).map(s=>({id:s.id,name:s.name}));
+  state.rosterUpdatedAt=Date.now();
+  document.getElementById('roster').value=rosterToText(state.roster);
+  save(); buildCards(); renderLiveGrid(); markDirty();
+  alert('✅ ใช้กลุ่ม "'+g.name+'" ('+state.roster.length+' คน) แล้ว');
+}
+function delGroupUI(){
+  const id=document.getElementById('groupSel').value;
+  const g=state.groups.find(x=>x.id===id);
+  if(!g){ alert('ยังไม่มีกลุ่มให้ลบ'); return; }
+  if(!confirm('ลบกลุ่ม "'+g.name+'"? (ลบจากทุกเครื่องเมื่อซิงค์ — รายชื่อที่ใช้อยู่ตอนนี้ไม่หาย)')) return;
+  state.groups=state.groups.filter(x=>x.id!==id);
+  state.groupsUpdatedAt=Date.now();
+  save(); renderGroupSelector(); markDirty();
 }
 async function loadTeachers(){
   const sel=document.getElementById('teacherSel');
@@ -713,45 +845,50 @@ async function showGate(){
 function confirmTeacher(){
   const v=document.getElementById('gateTeacher').value;
   if(!v || v.indexOf('กำลังโหลด')===0){ alert('กรุณาเลือกชื่อครูก่อน'); return; }
-  state.teacherName=v.replace(/ \(.*\)$/,'');
-  loadBundle();          // โหลดชุดข้อสอบของครูคนนี้
+  save();                // เซฟข้อมูลครูคนเดิมก่อนสลับ กันงานที่ค้างอยู่หาย
+  state.teacherName=v.replace(/ \(.*\)$/,'').trim();
+  loadBundle();          // โหลดชุดข้อสอบของครูคนนี้ (ในเครื่อง)
   applyTeacher(); save();
   refreshAfterTeacher();
   const ts=document.getElementById('teacherSel'); if(ts && [...ts.options].some(o=>o.value===v)) ts.value=v;
   document.getElementById('gate').style.display='none';
+  cloudSync();           // ดึง/รวมชุดข้อสอบล่าสุดจากคลาวด์ทันทีที่เลือกครู (เงียบๆ ถ้าออฟไลน์)
 }
 function refreshAfterTeacher(){
-  if(state.roster && state.roster.length){ document.getElementById('roster').value=state.roster.filter(s=>s.name).map(s=>s.name).join('\n'); }
+  if(state.roster && state.roster.length){ document.getElementById('roster').value=rosterToText(state.roster); }
   else document.getElementById('roster').value='';
-  renderSetSelector(); renderQEditor(); renderQShow(); buildCards(); renderLiveGrid(); renderResults();
+  document.getElementById('pickPanel').style.display='none'; pickList=[];   // กันรายชื่อห้องของครูคนเก่าค้าง
+  renderSetSelector(); renderGroupSelector(); renderQEditor(); renderQShow(); buildCards(); renderLiveGrid(); renderResults();
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 }
 
 /* ===================== จัดการชุดข้อสอบ (หลายชุดต่อครู) ===================== */
 function renderSetSelector(){
-  const sel=document.getElementById('setSel'); if(!sel) return;
-  sel.innerHTML=state.sets.map(s=>'<option value="'+s.id+'"'+(s.id===state.currentSetId?' selected':'')+'>'+(s.name||'(ไม่มีชื่อ)')+' ('+s.questions.length+' ข้อ)</option>').join('');
+  const html=liveSets().map(s=>'<option value="'+s.id+'"'+(s.id===state.currentSetId?' selected':'')+'>'+esc(s.name||'(ไม่มีชื่อ)')+' ('+s.questions.length+' ข้อ)</option>').join('');
+  const sel=document.getElementById('setSel');       if(sel) sel.innerHTML=html;
+  const bar=document.getElementById('setBarSel');    if(bar) bar.innerHTML=html;   // แถบบน header เห็นทุกแท็บ
 }
-function onSetChange(id){ save(); selectSet(id); save(); refreshSetUI(); }
+function onSetChange(id){ save(); selectSet(id); save(); refreshSetUI(); pushLive(true); }   // เปลี่ยนชุด → จอใหญ่เห็นตามทันที
 function refreshSetUI(){
   renderSetSelector(); renderQEditor(); renderQShow(); renderLiveGrid(); renderResults();
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
 }
 function newSetUI(){
-  const name=prompt('ชื่อชุดข้อสอบใหม่:', 'ชุดข้อสอบ '+(state.sets.length+1));
+  const name=prompt('ชื่อชุดข้อสอบใหม่:', 'ชุดข้อสอบ '+(liveSets().length+1));
   if(name===null) return;
-  save(); const s=newSet(name.trim()||('ชุดข้อสอบ '+(state.sets.length+1))); state.sets.push(s); selectSet(s.id); save(); refreshSetUI();
+  save(); const s=newSet(name.trim()||('ชุดข้อสอบ '+(liveSets().length+1))); state.sets.push(s); selectSet(s.id); save(); refreshSetUI(); markDirty();
 }
 function renameSetUI(){
   const s=curSet(); if(!s) return;
   const name=prompt('เปลี่ยนชื่อชุดข้อสอบ:', s.name);
   if(name===null) return;
-  s.name=name.trim()||s.name; state.qsetName=s.name; save(); refreshSetUI();
+  s.name=name.trim()||s.name; state.qsetName=s.name; s.updatedAt=Date.now(); save(); refreshSetUI(); markDirty();
 }
 function delSetUI(){
-  if(state.sets.length<=1){ alert('ต้องมีอย่างน้อย 1 ชุด ลบไม่ได้'); return; }
-  const s=curSet(); if(!confirm('ลบชุด "'+s.name+'" และผลสอบของชุดนี้ทั้งหมด?')) return;
-  state.sets=state.sets.filter(x=>x.id!==s.id); selectSet(state.sets[0].id); save(); refreshSetUI();
+  if(liveSets().length<=1){ alert('ต้องมีอย่างน้อย 1 ชุด ลบไม่ได้'); return; }
+  const s=curSet(); if(!confirm('ลบชุด "'+s.name+'" และผลสอบของชุดนี้ทั้งหมด?\n(จะถูกลบจากทุกเครื่องเมื่อซิงค์)')) return;
+  s.deleted=true; s.updatedAt=Date.now();   // tombstone — เก็บไว้บอกเครื่องอื่นให้ลบตาม
+  selectSet(liveSets()[0].id); save(); refreshSetUI(); markDirty();
 }
 
 /* ===================== นำเข้าข้อสอบ (วางข้อความ) ===================== */
@@ -780,11 +917,11 @@ function importQuestions(){
   const parsed=parseImport(txt);
   const stat=document.getElementById('importStat');
   if(!parsed.length){ stat.textContent='❌ ไม่พบคำถาม — ตรวจรูปแบบ (ขึ้นต้นด้วย 1. และ ก. ข. ค. ง.)'; return; }
-  const name=prompt('ตั้งชื่อชุดข้อสอบที่นำเข้า:', 'ชุดข้อสอบ '+(state.sets.length+1));
+  const name=prompt('ตั้งชื่อชุดข้อสอบที่นำเข้า:', 'ชุดข้อสอบ '+(liveSets().length+1));
   if(name===null) return;
   save();
-  const s=newSet(name.trim()||('ชุดข้อสอบ '+(state.sets.length+1)));
-  s.questions=parsed; state.sets.push(s); selectSet(s.id); save();
+  const s=newSet(name.trim()||('ชุดข้อสอบ '+(liveSets().length+1)));
+  s.questions=parsed; state.sets.push(s); selectSet(s.id); save(); markDirty();
   document.getElementById('importBox').value='';
   refreshSetUI();
   const noKey=parsed.filter(q=>!q.correct).length;
@@ -802,22 +939,28 @@ function renderQEditor(){
     ['ก','ข','ค','ง'].forEach((L,ci)=>{
       chHtml+='<div class="choice-row '+(q.correct===L?'correct':'')+'">'+
         '<span class="lab">'+L+'</span>'+
-        '<input type="text" value="'+(q.choices[ci]||'').replace(/"/g,'&quot;')+'" oninput="editChoice('+qi+','+ci+',this.value)">'+
+        '<input type="text" value="'+esc(q.choices[ci])+'" oninput="editChoice('+qi+','+ci+',this.value)">'+
         '<label class="correct-pick"><input type="radio" name="correct'+qi+'" '+(q.correct===L?'checked':'')+' onchange="setCorrect('+qi+',\''+L+'\')"> เฉลย</label>'+
         '</div>';
     });
     d.innerHTML='<div class="qhead"><div class="qno">'+thaiNum(qi+1)+'</div>'+
-      '<textarea rows="2" oninput="editQText('+qi+',this.value)" placeholder="โจทย์...">'+(q.text||'')+'</textarea>'+
+      '<textarea rows="2" oninput="editQText('+qi+',this.value)" placeholder="โจทย์...">'+esc(q.text)+'</textarea>'+
       '<button class="act red sm" onclick="delQuestion('+qi+')">ลบ</button></div>'+chHtml;
     list.appendChild(d);
   });
 }
-function editQText(i,v){ state.questions[i].text=v; }
-function editChoice(qi,ci,v){ state.questions[qi].choices[ci]=v; }
-function setCorrect(qi,L){ state.questions[qi].correct=L; renderQEditor(); }
-function addQuestion(){ state.questions.push({text:'',choices:['','','',''],correct:'ก'}); renderQEditor(); }
-function delQuestion(i){ if(confirm('ลบข้อ '+(i+1)+'?')){ state.questions.splice(i,1); renderQEditor(); save(); } }
-function saveQuestions(){ const s=curSet(); if(s) s.name=state.qsetName; save(); renderSetSelector(); document.getElementById('qSaveStat').textContent='✅ บันทึกแล้ว ('+state.questions.length+' ข้อ)'; document.getElementById('qtotal').textContent=thaiNum(state.questions.length); }
+let editSaveT=null;
+function editTouched(){   // แก้ข้อความแล้วบันทึกอัตโนมัติ (หน่วง 1.2 วิ) — ไม่ต้องพึ่งปุ่ม 💾 อย่างเดียว
+  touchCur();
+  clearTimeout(editSaveT);
+  editSaveT=setTimeout(()=>{ save(); markDirty(); const st=document.getElementById('qSaveStat'); if(st) st.textContent='💾 บันทึกอัตโนมัติแล้ว'; },1200);
+}
+function editQText(i,v){ state.questions[i].text=v; editTouched(); }
+function editChoice(qi,ci,v){ state.questions[qi].choices[ci]=v; editTouched(); }
+function setCorrect(qi,L){ state.questions[qi].correct=L; editTouched(); renderQEditor(); }
+function addQuestion(){ state.questions.push({text:'',choices:['','','',''],correct:'ก'}); editTouched(); renderQEditor(); }
+function delQuestion(i){ if(confirm('ลบข้อ '+(i+1)+'?')){ state.questions.splice(i,1); touchCur(); renderQEditor(); save(); markDirty(); } }
+function saveQuestions(){ const s=curSet(); if(s) s.name=state.qsetName; touchCur(); save(); renderSetSelector(); document.getElementById('qSaveStat').textContent='✅ บันทึกแล้ว ('+state.questions.length+' ข้อ)'; document.getElementById('qtotal').textContent=thaiNum(state.questions.length); cloudSync(); }
 
 /* ===================== สอบ: แสดงโจทย์ + สแกน ===================== */
 function onModeChange(){ curMode=document.getElementById('modeSel').value; renderModeTag(); renderLiveGrid(); renderPresent(); }
@@ -859,7 +1002,7 @@ function renderPresent(){
   const q=state.questions[curQ], total=state.questions.length;
   document.getElementById('pvQnum').textContent=thaiNum(curQ+1);
   document.getElementById('pvQtotal').textContent=thaiNum(total);
-  document.getElementById('pvMode').textContent= curMode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน';
+  document.getElementById('pvMode').textContent= (curMode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน')+' · 📚 '+(state.qsetName||'');
   const qEl=document.getElementById('pvQuestion'), cEl=document.getElementById('pvChoices');
   if(!q){ qEl.textContent='ยังไม่มีคำถาม — ไปที่แท็บ 📝 คำถาม'; cEl.innerHTML=''; }
   else{
@@ -946,12 +1089,14 @@ function loop(){
   let markers=[]; try{ markers=detector.detect(wctx.getImageData(0,0,dw,dh)); }catch(e){}
   octx.clearRect(0,0,dw,dh);
   const sess=ensureSess();
+  let recorded=false;
   markers.forEach(m=>{
     const ans=answerFromCorners(m.corners); if(!ans)return;
     const stu=state.roster.find(s=>s.id===m.id);
-    if(stu){ if(!sess[m.id])sess[m.id]={}; sess[m.id][curQ]=ans; }
+    if(stu){ if(!sess[m.id])sess[m.id]={}; if(sess[m.id][curQ]!==ans){ sess[m.id][curQ]=ans; recorded=true; } }
     drawMarker(m.corners,m.id,ans,!!stu);
   });
+  if(recorded) touchCur();   // มีคำตอบใหม่ → ประทับเวลาไว้ให้ระบบซิงค์
   document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
   renderLiveGrid();
   pushLive();
@@ -986,9 +1131,9 @@ function renderLiveGrid(){
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
   updatePresentCount();
 }
-function changeQ(d){ curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
+function changeQ(d){ if(!state.questions.length) return; curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
 async function finishTest(){
-  save();
+  touchCur(); save(); cloudSync();   // จบสอบ → ดันคำตอบขึ้นคลาวด์ด้วย เปิดเครื่องอื่นก็เห็นผล
   const modeTh = curMode==='pre'?'ก่อนเรียน':'หลังเรียน';
   // นับว่ามีนักเรียนตอบกี่คนในโหมดนี้
   let answeredStudents=0; const sess=state.sessions[curMode];
@@ -1004,7 +1149,7 @@ async function finishTest(){
     showView('res');
   }
 }
-function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); renderLiveGrid(); save(); } }
+function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); touchCur(); renderLiveGrid(); save(); markDirty(); } }
 
 /* ===================== เรียลไทม์ จอใหญ่ (WebSocket) ===================== */
 let scannerWS=null, viewerWS=null, lastPush=0, lastPayload='';
@@ -1026,7 +1171,7 @@ function ensureScannerWS(){
 function buildLivePayload(){
   const q=state.questions[curQ]||{}; const sess=ensureSess();
   const students=state.roster.map(s=>({id:s.id,name:s.name||('เลขที่ '+s.id),ans:(sess[s.id]&&sess[s.id][curQ])||null}));
-  return JSON.stringify({mode:curMode,q:curQ,total:state.questions.length,qtext:q.text||'',choices:q.choices||[],students});
+  return JSON.stringify({mode:curMode,q:curQ,total:state.questions.length,qset:state.qsetName||'',qtext:q.text||'',choices:q.choices||[],students});
 }
 function pushLive(force){
   ensureScannerWS();
@@ -1052,7 +1197,7 @@ function renderBig(data){
   let d; try{ d=JSON.parse(data); }catch(e){ return; }
   const modeTh=d.mode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน';
   document.getElementById('bQnum').textContent='ข้อ '+thaiNum((d.q||0)+1)+'/'+thaiNum(d.total||0);
-  document.getElementById('bMode').textContent=modeTh;
+  document.getElementById('bMode').textContent=modeTh+(d.qset?(' · 📚 '+d.qset):'');   // จอใหญ่แสดงชุดข้อสอบตามเครื่องสแกน
   document.getElementById('bQuestion').textContent='ข้อ '+thaiNum((d.q||0)+1)+'. '+(d.qtext||'');
   let ch=''; ['ก','ข','ค','ง'].forEach((L,i)=>{
     ch+='<div class="pv-choice"><span class="pv-letter">'+L+'</span><span class="pv-txt">'+((d.choices&&d.choices[i])||'')+'</span></div>'; });
@@ -1128,18 +1273,30 @@ async function sendToSheets(onlyMode){
   if(!state.gasUrl){ document.getElementById('resStat').textContent='⚠️ ไปตั้งค่า URL ที่แท็บ ⚙️ ก่อน'; showView('set'); return; }
   const total=state.questions.length, date=new Date().toLocaleDateString('th-TH');
   const modes = onlyMode ? [onlyMode] : ['pre','post'];
-  document.getElementById('resStat').textContent='⏳ กำลังส่ง'+(onlyMode?(' ('+(onlyMode==='pre'?'ก่อนเรียน':'หลังเรียน')+')'):'')+'...';
-  let sent=0;
+  const stat=document.getElementById('resStat');
+  stat.textContent='⏳ กำลังส่ง'+(onlyMode?(' ('+(onlyMode==='pre'?'ก่อนเรียน':'หลังเรียน')+')'):'')+'...';
+  // รวมทุกแถวก่อน แล้วส่งครั้งเดียว (เร็วกว่า + รู้ผลจริงว่าบันทึกได้กี่รายการ)
+  const rows=[];
   for(const s of state.roster){
     for(const mode of modes){
       const sess=state.sessions[mode]; if(!sess[s.id])continue;
       const sc=scoreOf(mode,s.id); if(sc.answered===0)continue;
       const answers=state.questions.map((q,qi)=>sess[s.id][qi]||'-').join('');
-      await gasGet({action:'save',date,qset:state.qsetName,teacher:state.teacherName||'',mode,id:s.id,name:s.name||'',score:sc.score,total,answers});
-      sent++;
+      rows.push({action:'save',date,qset:state.qsetName,teacher:state.teacherName||'',mode,id:s.id,name:s.name||'',score:sc.score,total,answers});
     }
   }
-  document.getElementById('resStat').textContent='✅ ส่งเข้า Google Sheets แล้ว '+sent+' รายการ — เปิดชีตเช็คได้เลย';
+  if(!rows.length){ stat.textContent='ไม่มีผลสอบให้ส่งในโหมดนี้'; return; }
+  try{
+    const res=await fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save_batch',rows})});
+    const j=await res.json();
+    if(j&&j.ok){ stat.textContent='✅ ส่งเข้า Google Sheets สำเร็จ '+j.saved+'/'+rows.length+' รายการ (ยืนยันจากชีตแล้ว)'; return; }
+    throw new Error(j&&j.error||'server error');
+  }catch(e){
+    // สำรอง: ส่งทีละแถวแบบเดิม (เช่น GAS ยังเป็นเวอร์ชันเก่าที่ไม่มี save_batch)
+    let sent=0;
+    for(const r of rows){ await gasGet(r); sent++; }
+    stat.textContent='📤 ส่งแบบสำรองแล้ว '+sent+' รายการ — เปิดชีตเช็คอีกครั้งว่าเข้าครบ (แนะนำอัปเดต Apps Script เป็นเวอร์ชันใหม่)';
+  }
 }
 
 /* ===================== generator ===================== */
@@ -1168,8 +1325,75 @@ function buildCards(){
 }
 
 /* ===================== ล้างข้อมูล ===================== */
-function resetSessions(){ if(confirm('ล้างผลสอบ (ก่อนเรียน+หลังเรียน) ของชุดนี้?')){ const s=curSet(); if(s){ s.sessions={pre:{},post:{}}; selectSet(s.id); } save(); renderResults(); renderLiveGrid(); } }
-function resetAll(){ if(confirm('ล้างทุกอย่างของครูทุกคนในเครื่องนี้ กลับค่าเริ่มต้น?')){ Object.keys(localStorage).filter(k=>k.indexOf('cardscan')===0).forEach(k=>localStorage.removeItem(k)); location.reload(); } }
+function resetSessions(){ if(confirm('ล้างผลสอบ (ก่อนเรียน+หลังเรียน) ของชุดนี้?\n(จะล้างบนทุกเครื่องเมื่อซิงค์)')){ const s=curSet(); if(s){ s.sessions={pre:{},post:{}}; s.updatedAt=Date.now(); selectSet(s.id); } save(); renderResults(); renderLiveGrid(); markDirty(); } }
+function resetAll(){ if(confirm('ล้างทุกอย่างของครูทุกคนในเครื่องนี้ กลับค่าเริ่มต้น?\n\n(หมายเหตุ: ข้อสอบที่ซิงค์ไว้บนคลาวด์จะถูกดึงกลับมาอัตโนมัติเมื่อเลือกชื่อครู — ข้อมูลบนคลาวด์ไม่หาย)')){ Object.keys(localStorage).filter(k=>k.indexOf('cardscan')===0).forEach(k=>localStorage.removeItem(k)); location.reload(); } }
+
+/* ===================== ☁️ ซิงค์ชุดข้อสอบข้ามเครื่อง (ผ่าน Google Apps Script ตัวเดิม) =====================
+ * หลักการ: ทุกชุดมี updatedAt (เวลาแก้ล่าสุด) → ส่งทั้งหมดขึ้น GAS → GAS เก็บ/รวมโดย "ใครใหม่กว่าชนะทั้งชุด"
+ * แล้วตอบสถานะรวมกลับมา → เครื่องนี้รวมกับของตัวเองอีกรอบ (ชุดที่มีแค่ในเครื่องไม่หาย)
+ * เรียกอัตโนมัติ: ตอนเลือกครู, กดบันทึก, เพิ่ม/นำเข้า/เปลี่ยนชื่อ/ลบชุด, จบสอบ, แก้รายชื่อ · กดที่ป้าย ☁️ เพื่อซิงค์เอง */
+let syncTimer=null, syncing=false, syncDirty=false;
+function setSyncStat(k,msg){
+  const el=document.getElementById('syncStat'); if(!el) return;
+  const m={ ok:'☁️ ซิงค์แล้ว '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' น.',
+    busy:'⏳ กำลังซิงค์...', pending:'✏️ มีแก้ไข รอซิงค์...',
+    off:'📴 ออฟไลน์ — เก็บในเครื่องไว้ก่อน (แตะเพื่อลองใหม่)', err:'⚠️ ซิงค์ไม่สำเร็จ (แตะเพื่อลองใหม่)'+(msg?(' — '+msg):'') };
+  el.className=k; el.textContent=m[k]||k;
+}
+function markDirty(){   // มีการแก้ไข → นัดซิงค์อัตโนมัติใน 2.5 วิ (รวมหลายการแก้เป็นครั้งเดียว)
+  syncDirty=true; setSyncStat('pending');
+  clearTimeout(syncTimer); syncTimer=setTimeout(()=>cloudSync(),2500);
+}
+async function cloudSync(manual){
+  if(!state.gasUrl || !state.teacherName) return;
+  if(syncing){ syncDirty=true; return; }
+  syncing=true; setSyncStat('busy');
+  try{
+    const payload={ action:'qset_sync', teacher:state.teacherName,
+      sets:state.sets.map(s=>({id:s.id,name:s.name,updatedAt:s.updatedAt||0,deleted:!!s.deleted,questions:s.questions||[],sessions:s.sessions||{pre:{},post:{}}})),
+      roster:{updatedAt:state.rosterUpdatedAt||0,list:state.roster},
+      groups:{updatedAt:state.groupsUpdatedAt||0,list:state.groups} };
+    const res=await fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+    const j=await res.json();
+    if(j&&j.ok){ syncDirty=false; applyCloud(j); setSyncStat('ok'); }
+    else{ setSyncStat('err', j&&j.error); if(manual) alert('ซิงค์ไม่สำเร็จ: '+((j&&j.error)||'ไม่ทราบสาเหตุ')+'\n(ถ้าเพิ่งอัปเดตระบบ ต้อง Deploy Apps Script เวอร์ชันใหม่ก่อน)'); }
+  }catch(e){
+    setSyncStat('off');
+    if(manual) alert('เชื่อมต่อคลาวด์ไม่ได้ — ข้อมูลยังเก็บอยู่ในเครื่องนี้ปลอดภัย จะซิงค์ให้อัตโนมัติเมื่อกดอีกครั้งตอนมีเน็ต');
+  }
+  syncing=false;
+  if(syncDirty){ clearTimeout(syncTimer); syncTimer=setTimeout(()=>cloudSync(),2500); }   // มีแก้เพิ่มระหว่างซิงค์ → ตามเก็บอีกรอบ
+}
+function applyCloud(j){
+  const before=JSON.stringify(state.sets)+'|'+JSON.stringify(state.roster);
+  // รวมผลจากคลาวด์กับของในเครื่อง: ชุดไหนอยู่ทั้งคู่ → เอาตัวที่ updatedAt ใหม่กว่า · อยู่ฝั่งเดียว → เก็บไว้
+  const byId={}; (j.sets||[]).forEach(s=>{ if(s&&s.id) byId[s.id]=s; });
+  const merged=[];
+  state.sets.forEach(loc=>{
+    const rem=byId[loc.id];
+    if(rem){ merged.push((Number(rem.updatedAt)||0)>=(Number(loc.updatedAt)||0)?rem:loc); delete byId[loc.id]; }
+    else merged.push(loc);   // มีแค่ในเครื่อง (เช่น เพิ่งสร้างตอนออฟไลน์) — ไม่ทิ้ง
+  });
+  Object.keys(byId).forEach(id=>merged.push(byId[id]));   // มีแค่บนคลาวด์ — รับเข้ามา
+  merged.forEach(s=>{ if(!s.sessions) s.sessions={pre:{},post:{}}; if(!s.questions) s.questions=[]; });
+  state.sets=merged;
+  if(j.roster && (Number(j.roster.updatedAt)||0)>(state.rosterUpdatedAt||0) && Array.isArray(j.roster.list) && j.roster.list.length){
+    state.roster=j.roster.list; state.rosterUpdatedAt=Number(j.roster.updatedAt)||0;
+    const rEl=document.getElementById('roster'); if(rEl) rEl.value=rosterToText(state.roster);
+  }
+  if(j.groups && (Number(j.groups.updatedAt)||0)>(state.groupsUpdatedAt||0) && Array.isArray(j.groups.list)){
+    state.groups=j.groups.list; state.groupsUpdatedAt=Number(j.groups.updatedAt)||0;
+    renderGroupSelector();
+  }
+  const keepQ=curQ;
+  selectSet(state.currentSetId);   // ผูก questions/sessions ใหม่ (ชุดเดิมถ้ายังอยู่ ไม่งั้นชุดแรกที่เหลือ)
+  curQ=Math.max(0,Math.min(keepQ,Math.max(0,state.questions.length-1)));   // ไม่เด้งข้อระหว่างสแกน
+  save();
+  // วาดหน้าจอใหม่เฉพาะเมื่อข้อมูลเปลี่ยนจริง — กันเคอร์เซอร์หลุดตอนครูกำลังพิมพ์แก้ข้อสอบ
+  const after=JSON.stringify(state.sets)+'|'+JSON.stringify(state.roster);
+  if(after!==before){ refreshSetUI(); buildCards(); }
+  else renderSetSelector();
+}
 
 /* ===================== ⏱️ ระเบิดเวลานักสืบ ===================== */
 const Timer = {
@@ -1301,11 +1525,13 @@ function timerToggleFull(){
 /* ===================== เริ่มต้น ===================== */
 load();   // โหลด settings + bundle ของครู (selectSet แล้ว)
 curMode=document.getElementById('modeSel').value;
-if(state.roster && state.roster.length){ document.getElementById('roster').value=state.roster.filter(s=>s.name).map(s=>s.name).join('\n'); }
+if(state.roster && state.roster.length){ document.getElementById('roster').value=rosterToText(state.roster); }
 if(state.gasUrl) document.getElementById('gasUrl').value=state.gasUrl;
 applyTeacher();
-renderSetSelector();
+renderSetSelector(); renderGroupSelector();
 renderModeTag(); renderQShow(); buildCards(); renderLiveGrid();
+const _ss=document.getElementById('syncStat'); if(_ss) _ss.textContent='☁️ ยังไม่ซิงค์ — เลือกชื่อครูก่อน';
+window.addEventListener('online',()=>{ if(syncDirty) cloudSync(); });   // เน็ตกลับมา → ซิงค์งานที่ค้างให้เอง
 showGate();   // เลือกครูก่อนเริ่มทุกครั้ง
 </script>
 </body>
