@@ -296,6 +296,7 @@
     <button id="t_gen" onclick="showView('gen')">🖨️ การ์ด</button>
     <button id="t_timer" onclick="showView('timer')">⏱️ จับเวลา</button>
     <button id="t_set" onclick="showView('set')">⚙️ ตั้งค่า</button>
+    <button onclick="showHelp()" title="วิธีใช้งานเบื้องต้นใน 1 นาที">❓ วิธีใช้</button>
   </div>
   <div id="setBar" class="no-print">
     <span class="sb-lab">📚 ชุดข้อสอบ:</span>
@@ -601,6 +602,42 @@
     <div class="row">
       <button class="act red sm" onclick="resetSessions()">ล้างผลสอบทั้งหมด (เก็บคำถาม/รายชื่อ)</button>
       <button class="act red sm" onclick="resetAll()">ล้างทุกอย่างกลับค่าเริ่มต้น</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ วิธีใช้งานใน 1 นาที ============ -->
+<div id="helpOverlay" style="display:none; position:fixed; inset:0; background:rgba(15,24,48,.75); z-index:2500; align-items:center; justify-content:center; padding:14px;">
+  <div style="background:#fff; border-radius:16px; max-width:600px; width:100%; max-height:92vh; overflow:auto; padding:20px 22px; box-shadow:0 12px 40px rgba(0,0,0,.4);">
+    <h2 style="margin:0 0 2px;">⚡ ใช้งานได้ใน 1 นาที</h2>
+    <p class="muted" style="margin:0 0 12px;">3 ขั้นตอน: สร้างข้อสอบ → พิมพ์การ์ด → สอบเลย</p>
+
+    <div class="help-step" style="border:1.5px solid #e1e5ee; border-left:5px solid var(--blue); border-radius:10px; padding:10px 14px; margin-bottom:9px;">
+      <b>1️⃣ สร้างแบบทดสอบ — แท็บ 📝 คำถาม</b>
+      <div style="font-size:14px; margin-top:4px;">คัดลอกข้อสอบจาก Word มาวางในช่อง "นำเข้าข้อสอบ" รูปแบบ<br>
+      <code style="background:#f0f3fa;padding:2px 8px;border-radius:6px;font-size:12.5px;">1. คำถาม… / ก. … ข. … ค. … ง. … / เฉลย ข</code><br>
+      กด <b>📥 แปลง &amp; นำเข้า</b> → ตั้งชื่อชุด เสร็จ! (หรือกด ➕ ชุดใหม่ แล้วพิมพ์ทีละข้อก็ได้)</div>
+    </div>
+
+    <div class="help-step" style="border:1.5px solid #e1e5ee; border-left:5px solid var(--green); border-radius:10px; padding:10px 14px; margin-bottom:9px;">
+      <b>2️⃣ พิมพ์การ์ด — แท็บ 🖨️ การ์ด <span class="muted" style="font-weight:400;">(ทำครั้งเดียว ใช้ซ้ำได้ทุกการสอบ)</span></b>
+      <div style="font-size:14px; margin-top:4px;">กด <b>โหลดห้อง</b> → เลือกห้อง → <b>ดึงรายชื่อ</b> (ติ๊กเลือกบางคนได้ แล้วบันทึกเป็นกลุ่มไว้ใช้ซ้ำ) → <b>สร้างการ์ด</b> → <b>🖨️ พิมพ์/PDF</b> → แจกการ์ดตามเลขที่นักเรียน</div>
+    </div>
+
+    <div class="help-step" style="border:1.5px solid #e1e5ee; border-left:5px solid var(--amber); border-radius:10px; padding:10px 14px; margin-bottom:9px;">
+      <b>3️⃣ สอบ — แท็บ 📷 สอบ(การ์ด)</b>
+      <div style="font-size:14px; margin-top:4px;">เช็คแถบบนว่าเลือก <b>📚 ชุดข้อสอบ</b> และ <b>👥 กลุ่ม</b> ถูกต้อง → เลือกโหมด <b>ก่อนเรียน/หลังเรียน</b> → กด <b>▶️ เปิดกล้อง</b><br>
+      นักเรียนชูการ์ด <b>หันตัวอักษรคำตอบ (ก/ข/ค/ง) ขึ้นด้านบน</b> → กวาดกล้องให้เห็นการ์ด ช่องนักเรียนจะเขียวทีละคน → ครบแล้วกด <b>ถัดไป ▶</b> จนจบ → กด <b>✅ จบ/บันทึกผล</b></div>
+    </div>
+
+    <div style="background:#f0f3fa; border-radius:10px; padding:9px 14px; font-size:13.5px;">
+      💡 <b>เคล็ดลับ:</b> เปิด <b>📺 จอใหญ่</b> บนคอม/โปรเจกเตอร์ (เลือกครูคนเดียวกัน) เด็กจะเห็นโจทย์+ใครตอบแล้วแบบสด ·
+      ดูคะแนนพัฒนาการและ <b>📈 ความยาก-ง่ายรายข้อ</b> ได้ที่แท็บ 📊 ผลสอบ ·
+      ข้อสอบ/กลุ่มซิงค์ข้ามเครื่องอัตโนมัติ ☁️ แค่เลือกชื่อครูเดียวกัน
+    </div>
+
+    <div style="text-align:center; margin-top:14px;">
+      <button class="act green" onclick="closeHelp()" style="font-size:16px; padding:11px 30px;">เข้าใจแล้ว เริ่มใช้เลย!</button>
     </div>
   </div>
 </div>
@@ -914,6 +951,7 @@ function confirmTeacher(){
   const ts=document.getElementById('teacherSel'); if(ts && [...ts.options].some(o=>o.value===v)) ts.value=v;
   document.getElementById('gate').style.display='none';
   cloudSync();           // ดึง/รวมชุดข้อสอบล่าสุดจากคลาวด์ทันทีที่เลือกครู (เงียบๆ ถ้าออฟไลน์)
+  if(!localStorage.getItem('cardscan_helpseen')) showHelp();   // ใช้เครื่องนี้ครั้งแรก → โชว์วิธีใช้ 1 นาที
 }
 function refreshAfterTeacher(){
   if(state.roster && state.roster.length){ document.getElementById('roster').value=rosterToText(state.roster); }
@@ -1666,6 +1704,13 @@ function timerToggleFull(){
   const st=document.getElementById('timerStage');
   if(!document.fullscreenElement){ (st.requestFullscreen?st.requestFullscreen():Promise.reject()).catch(()=>st.classList.toggle('full')); }
   else { document.exitFullscreen(); }
+}
+
+/* ===================== ❓ วิธีใช้งานใน 1 นาที ===================== */
+function showHelp(){ document.getElementById('helpOverlay').style.display='flex'; }
+function closeHelp(){
+  document.getElementById('helpOverlay').style.display='none';
+  try{ localStorage.setItem('cardscan_helpseen','1'); }catch(e){}
 }
 
 /* ===================== เริ่มต้น ===================== */
