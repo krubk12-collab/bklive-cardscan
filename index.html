@@ -333,8 +333,10 @@
       <span class="muted" id="liveSendStat">ส่งจอใหญ่: ปิด</span>
     </div>
     <div class="row">
-      <button class="act green" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
+      <button class="act green" id="btnBegin" onclick="startExam()" style="font-size:16px; font-weight:800; padding:11px 22px;">🚀 เริ่มสอบ</button>
+      <button class="act" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
       <button class="act gray" id="btnStop" onclick="stopCam()" style="display:none;">⏸️ ปิดกล้อง</button>
+      <span class="qbadge" id="examClock" style="display:none; color:var(--green);">⏱ ๐๐:๐๐</span>
       <span class="qbadge">ข้อ <span id="qnum">๑</span>/<span id="qtotal">๑๐</span></span>
       <button class="act sm" onclick="changeQ(-1)">◀ ก่อน</button>
       <button class="act sm" onclick="changeQ(1)">ถัดไป ▶</button>
@@ -464,6 +466,7 @@
     <div class="pv-top">
       <span class="pv-qnum" id="bQnum">ข้อ –</span>
       <span class="pv-mode" id="bMode"></span>
+      <span class="pv-count" id="bClock" style="display:none; color:#ffd98a;">⏱ ๐๐:๐๐</span>
       <span class="pv-count" id="bCount">รอข้อมูลจากมือถือ...</span>
     </div>
     <div class="pv-progress"><div class="pv-progress-fill" id="bBar"></div></div>
@@ -626,7 +629,7 @@
 
     <div class="help-step" style="border:1.5px solid #e1e5ee; border-left:5px solid var(--amber); border-radius:10px; padding:10px 14px; margin-bottom:9px;">
       <b>3️⃣ สอบ — แท็บ 📷 สอบ(การ์ด)</b>
-      <div style="font-size:14px; margin-top:4px;">เช็คแถบบนว่าเลือก <b>📚 ชุดข้อสอบ</b> และ <b>👥 กลุ่ม</b> ถูกต้อง → เลือกโหมด <b>ก่อนเรียน/หลังเรียน</b> → กด <b>▶️ เปิดกล้อง</b><br>
+      <div style="font-size:14px; margin-top:4px;">เช็คแถบบนว่าเลือก <b>📚 ชุดข้อสอบ</b> และ <b>👥 กลุ่ม</b> ถูกต้อง → เลือกโหมด <b>ก่อนเรียน/หลังเรียน</b> → กด <b>🚀 เริ่มสอบ</b> (เปิดกล้อง + จับเวลา + จอใหญ่ขึ้นข้อสอบพร้อมกันอัตโนมัติ)<br>
       นักเรียนชูการ์ด <b>หันตัวอักษรคำตอบ (ก/ข/ค/ง) ขึ้นด้านบน</b> → กวาดกล้องให้เห็นการ์ด ช่องนักเรียนจะเขียวทีละคน → ครบแล้วกด <b>ถัดไป ▶</b> จนจบ → กด <b>✅ จบ/บันทึกผล</b></div>
     </div>
 
@@ -1184,6 +1187,29 @@ document.addEventListener('fullscreenchange',()=>{   // กด Esc/F11 ออก
   if(!document.fullscreenElement && presentOn){ document.getElementById('presentOverlay').classList.remove('on'); presentOn=false; }
 });
 
+/* ===== 🚀 เริ่มสอบ: จุดเริ่มที่ชัดเจน — รีเซ็ตไปข้อ ๑ + เปิดกล้อง + แจ้งจอใหญ่ + จับเวลา ===== */
+let examStart=0, examClockId=null;
+function startExam(){
+  if(!state.questions.length){ alert('ยังไม่มีข้อสอบในชุดนี้ — เลือกชุดที่แถบบน หรือไปสร้างที่แท็บ 📝 คำถาม'); return; }
+  if(!state.roster.length || !state.roster.some(s=>s.name)){
+    if(!confirm('ยังไม่ได้เลือกกลุ่มนักเรียน — เริ่มด้วยรายชื่อปัจจุบันเลยหรือไม่?\n(เลือกกลุ่มได้ที่แถบบน 👥)')) return;
+  }
+  curQ=0; renderQShow(); renderLiveGrid();
+  examStart=Date.now();
+  document.getElementById('btnBegin').style.display='none';
+  const c=document.getElementById('examClock'); c.style.display=''; c.textContent='⏱ '+tmFmt(0);
+  clearInterval(examClockId);
+  examClockId=setInterval(()=>{ c.textContent='⏱ '+tmFmt((Date.now()-examStart)/1000); },1000);
+  if(!running) startCam();
+  pushLive(true);   // จอใหญ่เห็นทันที: ชุดข้อสอบ+รายชื่อกลุ่มเดียวกัน+นาฬิกาเริ่มเดิน
+}
+function stopExamClock(){
+  clearInterval(examClockId); examClockId=null; examStart=0;
+  document.getElementById('examClock').style.display='none';
+  document.getElementById('btnBegin').style.display='';
+  pushLive(true);   // จอใหญ่ซ่อนนาฬิกา
+}
+
 const video=document.getElementById('video'),overlay=document.getElementById('overlay'),octx=overlay.getContext('2d');
 const work=document.getElementById('work'),wctx=work.getContext('2d',{willReadFrequently:true});
 let stream=null,running=false,lastDetect=0;
@@ -1256,6 +1282,7 @@ function renderLiveGrid(){
 }
 function changeQ(d){ if(!state.questions.length) return; curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
 async function finishTest(){
+  stopExamClock();   // หยุดนาฬิกาจับเวลา + คืนปุ่มเริ่มสอบ
   touchCur(); save(); cloudSync();   // จบสอบ → ดันคำตอบขึ้นคลาวด์ด้วย เปิดเครื่องอื่นก็เห็นผล
   const modeTh = curMode==='pre'?'ก่อนเรียน':'หลังเรียน';
   // นับว่ามีนักเรียนตอบกี่คนในโหมดนี้
@@ -1294,7 +1321,9 @@ function ensureScannerWS(){
 function buildLivePayload(){
   const q=state.questions[curQ]||{}; const sess=ensureSess();
   const students=state.roster.map(s=>({id:s.id,name:s.name||('เลขที่ '+s.id),ans:(sess[s.id]&&sess[s.id][curQ])||null}));
-  return JSON.stringify({mode:curMode,q:curQ,total:state.questions.length,qset:state.qsetName||'',qtext:q.text||'',choices:q.choices||[],students});
+  return JSON.stringify({mode:curMode,q:curQ,total:state.questions.length,qset:state.qsetName||'',
+    elapsed: examStart? Math.floor((Date.now()-examStart)/1000) : null,   // นาฬิกาสอบ (จอใหญ่เดินต่อเอง)
+    qtext:q.text||'',choices:q.choices||[],students});
 }
 function pushLive(force){
   ensureScannerWS();
@@ -1316,8 +1345,19 @@ function startViewer(){
   }catch(e){ setViewerStat('เชื่อมต่อไม่ได้','off'); }
 }
 function setViewerStat(t,c){ const e=document.getElementById('viewerStat'); e.innerHTML=(t.indexOf('กำลัง')===0?spin(t):esc(t)); e.className='tag '+(c||''); }
+let vClockBase=null, vClockAt=0, vClockId=null;
+function vClockTick(){   // จอใหญ่เดินนาฬิกาต่อเองระหว่างรอข้อมูลรอบถัดไป
+  const el=document.getElementById('bClock'); if(!el) return;
+  if(vClockBase==null){ el.style.display='none'; return; }
+  el.style.display='';
+  el.textContent='⏱ '+tmFmt(vClockBase+(Date.now()-vClockAt)/1000);
+}
 function renderBig(data){
   let d; try{ d=JSON.parse(data); }catch(e){ return; }
+  if(typeof d.elapsed==='number'){ vClockBase=d.elapsed; vClockAt=Date.now(); }
+  else vClockBase=null;
+  if(!vClockId) vClockId=setInterval(vClockTick,1000);
+  vClockTick();
   const modeTh=d.mode==='pre'?'📘 ก่อนเรียน':'📗 หลังเรียน';
   document.getElementById('bQnum').textContent='ข้อ '+thaiNum((d.q||0)+1)+'/'+thaiNum(d.total||0);
   document.getElementById('bMode').textContent=modeTh+(d.qset?(' · 📚 '+d.qset):'');   // จอใหญ่แสดงชุดข้อสอบตามเครื่องสแกน
