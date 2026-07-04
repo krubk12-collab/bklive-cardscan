@@ -50,20 +50,28 @@
   /* จอใหญ่บนคอมจอกว้าง: โจทย์ใหญ่เต็มความกว้าง · ตัวเลือกซ้าย + กริดนักเรียนขวา */
   @media (min-width:1100px){
     #liveView.view{ max-width:1760px; }
-    #liveStage{ display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr);
+    #liveStage{ display:grid; grid-template-columns:minmax(0,7fr) minmax(0,3fr);
       grid-template-areas:"top top" "bar bar" "q q" "ch grid"; grid-template-rows:auto auto auto 1fr;
-      column-gap:2vw; align-items:start; }
+      column-gap:1.8vw; align-items:start; }
     #liveStage .pv-top{ grid-area:top; }
     #liveStage .pv-progress{ grid-area:bar; }
     #liveStage .pv-question{ grid-area:q; }   /* เต็มแถว — ใช้ขนาดใหญ่เท่าหน้าเต็มจอเดิม (เด็กหลังห้องอ่านชัด) */
-    #liveStage .pv-choices{ grid-area:ch; gap:1.2vh; }
-    #liveStage .pv-choice{ font-size:clamp(20px,2vw,34px); border-radius:14px; padding:1vh 1.4vw; }
+    #liveStage .pv-choices{ grid-area:ch; gap:1.2vh; }   /* ขนาดตัวเลือกใช้ของหน้าเต็มจอเดิม (ไม่ย่อ) */
+    /* กริดนักเรียนแบบย่อ: ไม่มี ✓ — ตอบแล้ว = แผ่นเขียวทั้งใบ เห็นไกลชัดกว่า และไม่เบียดพื้นที่ตัวเลือก */
     #liveStage .big-grid{ grid-area:grid; margin-top:1.6vh; align-content:start;
-      grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:6px;
+      grid-template-columns:repeat(auto-fill,minmax(62px,1fr)); gap:5px;
       max-height:calc(100vh - 430px); min-height:280px; overflow-y:auto; padding-right:4px; }
-    #liveStage .bstu{ padding:4px 3px; }
-    #liveStage .bstu .bans{ font-size:24px; }
+    #liveStage .bstu{ padding:4px 2px; }
+    #liveStage .bstu .bans{ display:none; }
+    #liveStage .bstu .bn{ font-size:11px; }
+    #liveStage .bstu .bnm{ font-size:11px; }
+    #liveStage .bstu.answered{ background:var(--green); border-color:#0d7a49; }
+    #liveStage .bstu.answered .bn, #liveStage .bstu.answered .bnm{ color:#fff; }
   }
+  /* กดเต็มจอในหน้า 📺 จอใหญ่ → ซ่อนเมนู/แผงเชื่อมต่อ เหลือแต่เวที */
+  body.stagefull header, body.stagefull #liveView .panel:not(#liveStage){ display:none; }
+  body.stagefull #liveView.view{ padding:8px 14px; }
+  body.stagefull #liveStage .big-grid{ max-height:calc(100vh - 340px); }
 
   /* gate เลือกครูก่อนเริ่ม */
   #gate{ position:fixed; inset:0; background:linear-gradient(135deg,#1b2540,#2d3a63); z-index:2000; display:none; align-items:center; justify-content:center; padding:16px;}
@@ -1720,6 +1728,12 @@ function renderBig(data){
   document.getElementById('bBar').style.width=(tot?Math.round(answered/tot*100):0)+'%';
 }
 function toggleFull(){ const el=document.documentElement; if(!document.fullscreenElement){ el.requestFullscreen&&el.requestFullscreen(); } else { document.exitFullscreen&&document.exitFullscreen(); } }
+// เต็มจอจากหน้า 📺 จอใหญ่ → ซ่อนเมนูให้เหลือแต่เวที (ออกเต็มจอ/Esc เมนูกลับมาเอง)
+document.addEventListener('fullscreenchange',()=>{
+  document.body.classList.toggle('stagefull',
+    document.fullscreenElement===document.documentElement &&
+    document.getElementById('liveView').classList.contains('active'));
+});
 
 /* ===================== ผลสอบ ===================== */
 function scoreOf(mode,sid){
