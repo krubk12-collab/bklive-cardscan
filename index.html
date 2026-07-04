@@ -34,7 +34,7 @@
   .big-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px;}
   .bstu{ border:3px solid #d4d9e6; border-radius:12px; padding:10px 6px; text-align:center; background:#fff;}
   .bstu .bn{ font-size:14px; color:#5b6275; font-weight:600;}
-  .bstu .bnm{ font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bstu .bnm{ font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#33406b;}   /* กำหนดสีเอง — ไม่งั้นรับ #fff จาก .bigstage อ่านไม่เห็น */
   .bstu .bans{ font-family:'Kanit'; font-size:46px; font-weight:700; color:#cfd4e0; line-height:1.1;}
   .bstu.answered{ border-color:var(--green); background:#eafaf2; transform:scale(1.0);}
   .bstu.answered .bans{ color:var(--green);}
@@ -47,20 +47,20 @@
   .bigstage .bstu{ border-width:2px; padding:6px 4px; border-radius:10px;}
   .bigstage .bstu .bn{ font-size:12px;} .bigstage .bstu .bnm{ font-size:12px;}
   .bigstage .bstu .bans{ font-size:30px;}
-  /* จอใหญ่บนคอมจอกว้าง: โจทย์+ตัวเลือกซ้าย · กริดนักเรียนขวา — เห็นครบไม่ต้องเลื่อน ไม่เหลือที่ว่างข้างจอ */
+  /* จอใหญ่บนคอมจอกว้าง: โจทย์ใหญ่เต็มความกว้าง · ตัวเลือกซ้าย + กริดนักเรียนขวา */
   @media (min-width:1100px){
     #liveView.view{ max-width:1760px; }
     #liveStage{ display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr);
-      grid-template-areas:"top top" "bar bar" "q grid" "ch grid"; grid-template-rows:auto auto auto 1fr;
+      grid-template-areas:"top top" "bar bar" "q q" "ch grid"; grid-template-rows:auto auto auto 1fr;
       column-gap:2vw; align-items:start; }
     #liveStage .pv-top{ grid-area:top; }
     #liveStage .pv-progress{ grid-area:bar; }
-    #liveStage .pv-question{ grid-area:q; font-size:clamp(24px,2.5vw,42px); }
+    #liveStage .pv-question{ grid-area:q; }   /* เต็มแถว — ใช้ขนาดใหญ่เท่าหน้าเต็มจอเดิม (เด็กหลังห้องอ่านชัด) */
     #liveStage .pv-choices{ grid-area:ch; gap:1.2vh; }
-    #liveStage .pv-choice{ font-size:clamp(18px,1.8vw,30px); border-radius:14px; padding:1vh 1.4vw; }
+    #liveStage .pv-choice{ font-size:clamp(20px,2vw,34px); border-radius:14px; padding:1vh 1.4vw; }
     #liveStage .big-grid{ grid-area:grid; margin-top:1.6vh; align-content:start;
       grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:6px;
-      max-height:calc(100vh - 320px); min-height:300px; overflow-y:auto; padding-right:4px; }
+      max-height:calc(100vh - 430px); min-height:280px; overflow-y:auto; padding-right:4px; }
     #liveStage .bstu{ padding:4px 3px; }
     #liveStage .bstu .bans{ font-size:24px; }
   }
