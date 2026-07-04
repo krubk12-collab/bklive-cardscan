@@ -278,11 +278,30 @@
     <img src="assets/banner.png" class="gate-banner" alt="ระบบตรวจคำตอบด้วยการ์ดสแกน">
     <h2>🔎 ระบบตรวจคำตอบด้วยการ์ดสแกน</h2>
     <p class="muted">เลือกชื่อครูผู้สอนก่อนเริ่มใช้งาน<br>(กันข้อมูลปนกันเมื่อครูใช้พร้อมกันหลายคน)</p>
-    <select id="gateTeacher"><option>กำลังโหลดรายชื่อครู...</option></select>
+    <select id="gateTeacher" onchange="gatePwToggle()"><option>กำลังโหลดรายชื่อครู...</option></select>
+    <div id="gatePwRow" style="display:none; margin-top:12px;">
+      <p class="muted" style="margin:0 0 4px;">🔒 ครูท่านนี้ตั้งรหัสผ่านไว้ — กรอกรหัสผ่านก่อนเข้าใช้งาน</p>
+      <input type="password" id="gatePw" placeholder="รหัสผ่าน" autocomplete="off"
+             style="width:100%; font-size:17px; padding:11px; box-sizing:border-box;"
+             onkeydown="if(event.key==='Enter')confirmTeacher()">
+    </div>
     <div style="margin-top:16px;">
-      <button class="act green" onclick="confirmTeacher()" style="font-size:16px; padding:12px 26px;">▶️ เริ่มใช้งาน</button>
+      <button class="act green" id="gateGo" onclick="confirmTeacher()" style="font-size:16px; padding:12px 26px;">▶️ เริ่มใช้งาน</button>
     </div>
     <p class="muted" id="gateStat" style="margin-top:10px;"></p>
+    <p style="margin:12px 0 0;"><a href="#" onclick="togglePwPanel();return false;" style="font-size:13.5px; color:#2d6cdf; text-decoration:none;">🔒 ตั้ง/เปลี่ยนรหัสผ่านของฉัน (ไม่บังคับ)</a></p>
+    <div id="pwPanel" style="display:none; margin-top:10px; text-align:left; background:#f4f6fb; border-radius:12px; padding:12px 14px;">
+      <p class="muted" style="margin:0 0 8px;">ตั้งรหัสให้ <b id="pwWho">ครูที่เลือกด้านบน</b> — คนอื่นจะเข้าใช้ชื่อเราไม่ได้ถ้าไม่รู้รหัส · <b>ไม่ตั้งก็ใช้งานได้ตามปกติ</b></p>
+      <input type="password" id="pwOld" placeholder="รหัสเดิม (ถ้าเคยตั้ง)" autocomplete="off"
+             style="width:100%; font-size:16px; padding:9px; box-sizing:border-box; margin-bottom:6px;">
+      <input type="password" id="pwNew" placeholder="รหัสใหม่ (๔ ตัวขึ้นไป)" autocomplete="off"
+             style="width:100%; font-size:16px; padding:9px; box-sizing:border-box;">
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="act sm" onclick="setPassword(this)">💾 บันทึกรหัสผ่าน</button>
+        <button class="act red sm" onclick="clearPassword(this)">🗑️ ยกเลิกรหัสผ่าน</button>
+      </div>
+      <p class="muted" id="pwStat" style="margin:8px 0 0;"></p>
+    </div>
   </div>
 </div>
 <header>
@@ -819,6 +838,119 @@ function jsonp(params){
     setTimeout(()=>{ if(window[cb]){ reject('หมดเวลา'); cleanup(); } },15000);
   });
 }
+
+/* ===================== รหัสผ่านประจำตัวครู (ไม่บังคับ) =====================
+ * ครูที่ไม่ตั้งรหัส → เข้าได้เลยเหมือนเดิม · ครูที่ตั้งรหัส → หน้า gate จะขอรหัสก่อน
+ * ส่งเฉพาะ SHA-256 hash ขึ้นเซิร์ฟเวอร์ (ไม่ส่ง/ไม่เก็บรหัสจริง) · เครื่องที่กรอกถูกแล้วจะจำไว้ ไม่ถามซ้ำ */
+let teacherPwMap={};   // ชื่อครู -> 1 ถ้าตั้งรหัสผ่านไว้ (มากับรายชื่อครูจาก GAS)
+function updatePwMap(list){ (list||[]).forEach(t=>{ if(t&&t.name) teacherPwMap[t.name]=t.pw?1:0; }); }
+function pwTokenKey(name){ return 'cardscan_pwok_'+roomHashKey(name); }
+function pwHash(name,pw){ return sha256(name+'|'+pw); }
+function gatePwToggle(){   // โชว์ช่องรหัสเฉพาะครูที่ตั้งรหัสไว้ และเครื่องนี้ยังไม่เคยกรอกถูก
+  const v=document.getElementById('gateTeacher').value||'';
+  const name=v.replace(/ \(.*\)$/,'').trim();
+  const need=teacherPwMap[name] && !localStorage.getItem(pwTokenKey(name));
+  document.getElementById('gatePwRow').style.display=need?'block':'none';
+  document.getElementById('gatePw').value='';
+  const p=document.getElementById('pwPanel');   // แผงตั้งรหัสเปิดอยู่ → อัปเดตชื่อครูตามที่เลือก
+  if(p && p.style.display!=='none'){
+    document.getElementById('pwWho').textContent = name ? '"'+name+'"' : 'ครูที่เลือกด้านบน';
+    pwMsg(name && teacherPwMap[name] ? 'ครูท่านนี้มีรหัสผ่านอยู่แล้ว — เปลี่ยน/ยกเลิกได้ (ต้องรู้รหัสเดิม)'
+                                     : 'ยังไม่มีรหัสผ่าน — ตั้งได้เลย ไม่ต้องกรอกช่องรหัสเดิม');
+  }
+}
+// SHA-256 แบบ pure JS — ได้ค่าเท่ากันทุกเครื่อง/ทุกวิธีเปิดไฟล์ (ไม่พึ่ง crypto.subtle ที่ใช้ได้เฉพาะ https)
+function sha256(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const bytes=[...new TextEncoder().encode(str)];
+  const bitLen=bytes.length*8;
+  bytes.push(0x80); while(bytes.length%64!==56) bytes.push(0);
+  for(let i=7;i>=0;i--) bytes.push((bitLen/Math.pow(2,i*8))&0xff);
+  const rr=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let i=0;i<bytes.length;i+=64){
+    const w=new Array(64);
+    for(let t=0;t<16;t++) w[t]=(bytes[i+t*4]<<24)|(bytes[i+t*4+1]<<16)|(bytes[i+t*4+2]<<8)|bytes[i+t*4+3];
+    for(let t=16;t<64;t++){
+      const s0=rr(w[t-15],7)^rr(w[t-15],18)^(w[t-15]>>>3);
+      const s1=rr(w[t-2],17)^rr(w[t-2],19)^(w[t-2]>>>10);
+      w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let t=0;t<64;t++){
+      const S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g);
+      const t1=(h+S1+ch+K[t]+w[t])>>>0;
+      const S0=rr(a,2)^rr(a,13)^rr(a,22), mj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+mj)>>>0;
+      h=g; g=f; f=e; e=(d+t1)>>>0; d=c; c=b; b=a; a=(t1+t2)>>>0;
+    }
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
+function pwMsg(m){ const el=document.getElementById('pwStat'); if(el) el.innerHTML=m; }
+// ครูเป้าหมายของแผงรหัสผ่าน = ครูที่เลือกในหน้า gate (ถ้าไม่มีใช้ครูปัจจุบัน)
+function pwTargetTeacher(){
+  const v=document.getElementById('gateTeacher').value||'';
+  if(v && v.indexOf('กำลังโหลด')!==0) return v.replace(/ \(.*\)$/,'').trim();
+  return state.teacherName||'';
+}
+function togglePwPanel(){
+  const p=document.getElementById('pwPanel');
+  const show = p.style.display==='none';
+  p.style.display = show?'block':'none';
+  if(show){
+    const name=pwTargetTeacher();
+    document.getElementById('pwWho').textContent = name ? '"'+name+'"' : 'ครูที่เลือกด้านบน';
+    pwMsg(name && teacherPwMap[name] ? 'ครูท่านนี้มีรหัสผ่านอยู่แล้ว — เปลี่ยน/ยกเลิกได้ (ต้องรู้รหัสเดิม)'
+                                     : 'ยังไม่มีรหัสผ่าน — ตั้งได้เลย ไม่ต้องกรอกช่องรหัสเดิม');
+  }
+}
+async function setPassword(btn){
+  const name=pwTargetTeacher();
+  if(!name){ pwMsg('⚠️ เลือกชื่อครูด้านบนก่อนครับ'); return; }
+  const nw=document.getElementById('pwNew').value;
+  if(nw.trim().length<4){ pwMsg('⚠️ รหัสใหม่ต้องยาวอย่างน้อย ๔ ตัวอักษร'); return; }
+  const old=document.getElementById('pwOld').value;
+  btnBusy(btn,true); pwMsg(spin('กำลังบันทึกรหัสผ่าน...'));
+  try{
+    const r=await jsonp({action:'pwset', teacher:name, hash:pwHash(name,nw), old: old?pwHash(name,old):''});
+    if(r&&r.ok){
+      teacherPwMap[name]=1;
+      localStorage.setItem(pwTokenKey(name), pwHash(name,nw));   // เครื่องนี้ไม่ต้องกรอกซ้ำ
+      document.getElementById('pwOld').value=''; document.getElementById('pwNew').value='';
+      pwMsg('✅ ตั้งรหัสผ่านของ "'+esc(name)+'" แล้ว — เครื่องอื่นที่เลือกชื่อนี้จะต้องกรอกรหัสก่อนเข้า');
+      gatePwToggle();
+    } else pwMsg('❌ '+esc((r&&r.error)||'ตั้งรหัสไม่สำเร็จ')+' — ถ้าเคยตั้งรหัสไว้ ต้องกรอก "รหัสเดิม" ให้ถูกก่อน');
+  }catch(e){ pwMsg('⚠️ เชื่อมต่อระบบไม่ได้ ('+esc(e)+') ลองใหม่อีกครั้ง'); }
+  btnBusy(btn,false);
+}
+async function clearPassword(btn){
+  const name=pwTargetTeacher();
+  if(!name){ pwMsg('⚠️ เลือกชื่อครูด้านบนก่อนครับ'); return; }
+  const old=document.getElementById('pwOld').value;
+  if(!old){ pwMsg('⚠️ กรอกช่อง "รหัสเดิม" ก่อน แล้วค่อยกดยกเลิกรหัส'); return; }
+  if(!confirm('ยกเลิกรหัสผ่านของ "'+name+'"?\nหลังจากนี้ใครก็เข้าใช้งานในชื่อนี้ได้เหมือนเดิม')) return;
+  btnBusy(btn,true); pwMsg(spin('กำลังยกเลิกรหัสผ่าน...'));
+  try{
+    const r=await jsonp({action:'pwset', teacher:name, hash:'', old:pwHash(name,old)});
+    if(r&&r.ok){
+      teacherPwMap[name]=0;
+      localStorage.removeItem(pwTokenKey(name));
+      document.getElementById('pwOld').value=''; document.getElementById('pwNew').value='';
+      pwMsg('✅ ยกเลิกรหัสผ่านแล้ว — เข้าใช้งานได้เลยไม่ต้องกรอกรหัส');
+      gatePwToggle();
+    } else pwMsg('❌ '+esc((r&&r.error)||'ยกเลิกไม่สำเร็จ')+' — เช็คว่ากรอกรหัสเดิมถูกต้อง');
+  }catch(e){ pwMsg('⚠️ เชื่อมต่อระบบไม่ได้ ('+esc(e)+') ลองใหม่อีกครั้ง'); }
+  btnBusy(btn,false);
+}
 async function loadClasses(btn){
   const sel=document.getElementById('classSel');
   sel.innerHTML='<option>กำลังโหลด...</option>'; btnBusy(btn,true);
@@ -928,6 +1060,7 @@ async function loadTeachers(btn){
   sel.innerHTML='<option>กำลังโหลด...</option>'; btnBusy(btn,true);
   document.getElementById('teacherStat').innerHTML=spin('กำลังโหลด...');
   try{ const t=await jsonp({action:'teachers'});
+    updatePwMap(t);
     sel.innerHTML='<option value="">— เลือกครูผู้สอน —</option>'+t.map(x=>'<option'+(x.name===state.teacherName?' selected':'')+'>'+x.name+(x.position?(' ('+x.position+')'):'')+'</option>').join('');
     document.getElementById('teacherStat').textContent='โหลด '+t.length+' คน';
   }catch(e){ sel.innerHTML='<option>โหลดไม่ได้ ('+e+')</option>'; document.getElementById('teacherStat').textContent=''; }
@@ -952,20 +1085,52 @@ async function showGate(){
   document.getElementById('gateStat').innerHTML=spin('กำลังโหลดรายชื่อครูจากระบบโรงเรียน...');
   try{
     const t=await jsonp({action:'teachers'});
+    updatePwMap(t);
     sel.innerHTML=t.map(x=>'<option'+(x.name===state.teacherName?' selected':'')+'>'+x.name+(x.position?(' ('+x.position+')'):'')+'</option>').join('');
     if(state.teacherName){ const opt=[...sel.options].find(o=>o.value.replace(/ \(.*\)$/,'')===state.teacherName); if(opt) sel.value=opt.value; }
     document.getElementById('gateStat').textContent='';
+    gatePwToggle();
   }catch(e){
     const def=state.teacherName||'ครู ณัฏฐจิรา ทองงาม';
     sel.innerHTML='<option>'+def+'</option>';
     document.getElementById('gateStat').textContent='โหลดรายชื่อครูไม่ได้ ใช้ค่าเดิมไปก่อน (เช็คเน็ต/URL)';
+    document.getElementById('gatePwRow').style.display='none';
   }
 }
-function confirmTeacher(){
+async function confirmTeacher(){
   const v=document.getElementById('gateTeacher').value;
   if(!v || v.indexOf('กำลังโหลด')===0){ alert('กรุณาเลือกชื่อครูก่อน'); return; }
+  const name=v.replace(/ \(.*\)$/,'').trim();
+  // ครูที่ตั้งรหัสผ่านไว้ → ตรวจก่อนเข้า (เครื่องที่เคยกรอกถูกจะจำไว้ ไม่ถามซ้ำ)
+  if(teacherPwMap[name]){
+    const kk=pwTokenKey(name), stat=document.getElementById('gateStat'), btn=document.getElementById('gateGo');
+    const typed=document.getElementById('gatePw').value;
+    const h = typed ? pwHash(name,typed) : (localStorage.getItem(kk)||'');
+    if(!h){
+      document.getElementById('gatePwRow').style.display='block';
+      document.getElementById('gatePw').focus();
+      stat.textContent='🔒 กรอกรหัสผ่านของครูท่านนี้ก่อนครับ'; return;
+    }
+    btnBusy(btn,true); stat.innerHTML=spin('กำลังตรวจรหัสผ่าน...');
+    let r=null;
+    try{ r=await jsonp({action:'pwcheck', teacher:name, hash:h}); }catch(e){}
+    btnBusy(btn,false);
+    if(r && !r.ok){   // รหัสผิด (หรือรหัสที่เครื่องจำไว้ถูกเปลี่ยนไปแล้ว)
+      localStorage.removeItem(kk);
+      document.getElementById('gatePwRow').style.display='block';
+      document.getElementById('gatePw').value=''; document.getElementById('gatePw').focus();
+      stat.textContent = typed ? '❌ รหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง' : '🔒 รหัสผ่านถูกเปลี่ยน — กรอกรหัสใหม่ครับ';
+      return;
+    }
+    if(r && r.ok){
+      if(r.none){ teacherPwMap[name]=0; localStorage.removeItem(kk); }   // ครูยกเลิกรหัสไปแล้ว
+      else localStorage.setItem(kk,h);   // เครื่องนี้ผ่านแล้ว จำไว้
+      stat.textContent='';
+    } else stat.textContent='⚠️ ตรวจรหัสกับระบบไม่ได้ (ออฟไลน์) — เข้าใช้งานไปก่อน';
+  }
+  document.getElementById('gatePw').value='';
   save();                // เซฟข้อมูลครูคนเดิมก่อนสลับ กันงานที่ค้างอยู่หาย
-  state.teacherName=v.replace(/ \(.*\)$/,'').trim();
+  state.teacherName=name;
   loadBundle();          // โหลดชุดข้อสอบของครูคนนี้ (ในเครื่อง)
   applyTeacher(); save();
   refreshAfterTeacher();
