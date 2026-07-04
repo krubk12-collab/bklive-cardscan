@@ -97,6 +97,17 @@
 
   /* scanner */
   #camWrap{ position:relative; width:100%; background:#000; border-radius:12px; overflow:hidden; }
+  /* แถบ "ยังไม่ได้สแกน" ทับขอบล่างของภาพกล้อง (แตะเพื่อย่อ/ขยาย) */
+  #missWrap{ position:absolute; left:0; right:0; bottom:0; background:rgba(15,24,48,.74); color:#fff;
+    padding:6px 10px 8px; font-family:'Kanit'; cursor:pointer; user-select:none; -webkit-user-select:none; }
+  #missWrap .mw-head{ font-size:14px; font-weight:700; color:#ffd98a; display:flex; align-items:center; gap:6px; }
+  #missWrap .mw-fold{ margin-left:auto; font-weight:400; color:#dfe6f5; font-size:12px; white-space:nowrap; }
+  #missWrap .mw-chips{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; max-height:96px; overflow-y:auto; }
+  #missWrap.collapsed .mw-chips{ display:none; }
+  #missWrap.done{ background:rgba(13,92,59,.82); }
+  .mchip{ background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.38); border-radius:8px;
+    padding:2px 9px; font-size:15px; font-weight:700; line-height:1.35; white-space:nowrap; }
+  .mchip .mnm{ font-weight:400; font-size:12.5px; opacity:.92; }
   #video{ width:100%; display:block; }
   #overlay{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
   .qbadge{ font-family:'Kanit'; font-size:18px; color:var(--navy); font-weight:700; }
@@ -373,6 +384,7 @@
     <div id="camWrap">
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
+      <div id="missWrap" style="display:none;" onclick="toggleMiss()" title="แตะเพื่อย่อ/ขยาย"></div>
     </div>
   </div>
 
@@ -1425,7 +1437,7 @@ async function startCam(){
   ensureScannerWS();
   running=true; loop();
 }
-function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; }
+function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; renderMissing(); }
 
 function loop(){
   if(!running)return; requestAnimationFrame(loop);
@@ -1474,12 +1486,40 @@ function renderLiveGrid(){
   state.roster.forEach(s=>{ const d=document.getElementById('stu_'+s.id); if(!d)return;
     const a=sess[s.id]&&sess[s.id][curQ]; d.classList.toggle('answered',!!a); d.querySelector('.ans').textContent=a||'–'; if(a)answered++; });
   document.getElementById('answerCount').textContent='· ตอบแล้ว '+answered+'/'+state.roster.length+' คน';
+  renderMissing();
   document.getElementById('qnum').textContent=thaiNum(curQ+1);
   document.getElementById('qnum2').textContent=thaiNum(curQ+1);
   document.getElementById('qtotal').textContent=thaiNum(state.questions.length);
   updatePresentCount();
   updateTestStat();   // ป้ายสถานะก่อน/หลังเรียนบน header อัปเดตสดตามการสแกน
 }
+/* ---- แถบ "ยังไม่ได้สแกน" บนภาพกล้อง (เห็นขณะสแกนโดยไม่ต้องละสายตาไปดูกริดข้างล่าง) ---- */
+let missCollapsed=localStorage.getItem('cardscan_missfold')==='1', lastMissSig='';
+function toggleMiss(){ missCollapsed=!missCollapsed; localStorage.setItem('cardscan_missfold',missCollapsed?'1':'0'); lastMissSig=''; renderMissing(); }
+function shortName(n){ return String(n).replace(/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|ด\.ช\.|ด\.ญ\.)\s*/,'').split(' ')[0]; }
+function renderMissing(){
+  const el=document.getElementById('missWrap'); if(!el) return;
+  if(!running || !state.roster.length){ el.style.display='none'; lastMissSig=''; return; }
+  const sess=ensureSess();
+  const miss=state.roster.filter(s=>!(sess[s.id]&&sess[s.id][curQ]));
+  const sig=curQ+'|'+missCollapsed+'|'+miss.map(s=>s.id).join(',');   // วาดใหม่เฉพาะเมื่อข้อมูลเปลี่ยน (loop เรียกถี่)
+  if(sig===lastMissSig) return; lastMissSig=sig;
+  el.style.display='block';
+  el.classList.toggle('done', miss.length===0);
+  el.classList.toggle('collapsed', missCollapsed && miss.length>0);
+  if(!miss.length){
+    el.innerHTML='<div class="mw-head" style="color:#9ff3c4;">✅ ข้อ '+thaiNum(curQ+1)+' สแกนครบทุกคนแล้ว — กด "ถัดไป ▶" ได้เลย</div>';
+    return;
+  }
+  const showName = miss.length<=4;   // เหลือน้อยแล้ว โชว์ชื่อให้ครูตามหาตัวถูกคน
+  let h='<div class="mw-head">⏳ ยังไม่ได้สแกน '+thaiNum(miss.length)+' คน'
+       +'<span class="mw-fold">'+(missCollapsed?'▸ แตะดูเลขที่':'▾ แตะย่อ')+'</span></div>';
+  h+='<div class="mw-chips">'+miss.map(s=>
+      '<span class="mchip">'+thaiNum(s.id)+(showName&&s.name?' <span class="mnm">'+esc(shortName(s.name))+'</span>':'')+'</span>'
+    ).join('')+'</div>';
+  el.innerHTML=h;
+}
+
 function changeQ(d){ if(!state.questions.length) return; curQ=Math.max(0,Math.min(state.questions.length-1,curQ+d)); renderQShow(); renderLiveGrid(); save(); pushLive(true); }
 async function finishTest(){
   stopExamClock();   // หยุดนาฬิกาจับเวลา + คืนปุ่มเริ่มสอบ
