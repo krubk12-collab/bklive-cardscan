@@ -121,11 +121,31 @@
     padding:3px 14px; border-radius:14px; white-space:nowrap; }
   body.scanning .camNav, body.scanning #camQBadge{ display:block; }
 
+  /* มือถือ: แท็บเลื่อนแนวนอนแถวเดียว + แถบชุดข้อสอบเรียงตาราง + ซ่อนป้ายซ้ำซ้อน */
+  @media (max-width:760px){
+    header{ padding:8px 10px; gap:6px; }
+    header h1{ font-size:15.5px; }
+    #teacherBadge{ margin-left:auto; }
+    .tabs{ margin-left:0; width:100%; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar{ display:none; }
+    .tabs button{ flex:0 0 auto; padding:9px 14px; font-size:14px; border-radius:10px; }
+    #setBar{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 8px; align-items:center; }
+    #setBar select{ max-width:none; width:100%; min-width:0; }
+    #testStat{ justify-self:start; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    #syncStat{ margin-left:0; justify-self:end; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    #modeTag{ display:none; }   /* ซ้ำกับ dropdown โหมดที่เลือกอยู่แล้ว */
+    .panel .ctl-main{ grid-template-columns:1fr 1fr; }   /* .panel นำหน้าให้ชนะกฎฐานที่อยู่ท้ายไฟล์กว่า */
+    .panel .ctl-main .act:last-child{ grid-column:1/-1; }   /* ปุ่มสุดท้าย (จบ/บันทึก) เต็มแถว สมดุลเมื่อจำนวนปุ่มคี่ */
+    .view{ padding:10px; }
+    .hero{ padding:0 10px; }
+  }
+
   /* โหมดสแกน: เก็บเมนูให้จอโล่ง (สำคัญบนมือถือ — เดิมเมนูกินเกือบครึ่งจอ) */
   body.scanning .hero{ display:none; }
   @media (max-width:760px){
     body.scanning header{ display:none; }
     body.scanning #modeRow{ display:none; }
+    body.scanning #liveLink{ display:none; }
     body.scanning .scanHide{ display:none; }
     body.scanning .view{ padding:8px; }
     body.scanning .panel{ padding:8px 10px; margin-bottom:8px; }
@@ -136,6 +156,14 @@
   #video{ width:100%; display:block; }
   #overlay{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
   .qbadge{ font-family:'Kanit'; font-size:18px; color:var(--navy); font-weight:700; }
+  /* กลุ่มปุ่มหน้าสอบ: หลัก / สเต็ปข้อ / รอง — ปุ่มหลักใหญ่กดง่าย ไม่ปนกับปุ่มย่อย */
+  .ctl-main{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,220px)); gap:8px; margin-bottom:10px; justify-content:start; }
+  .ctl-main .act{ min-width:0; min-height:48px; font-size:15.5px; font-weight:800; border-radius:11px; padding:9px 8px; }
+  .ctl-step{ display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:10px; flex-wrap:wrap; }
+  .ctl-step .act{ min-height:42px; min-width:96px; }
+  .ctl-sub{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  #liveLink{ margin-top:10px; border-top:1px dashed #dfe3ee; padding-top:8px; }
+  #liveLink summary{ cursor:pointer; color:#71788a; font-size:13px; font-weight:600; }
   .live-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:7px; margin-top:10px; }
   .stu{ border:2px solid #d4d9e6; border-radius:9px; padding:6px 4px; text-align:center; background:#fff; }
   .stu .n{ font-size:11px; color:#7a8194; font-weight:600;}
@@ -376,31 +404,40 @@
     </div>
   </div>
   <div class="panel">
-    <div class="row" id="modeRow" style="margin-bottom:8px;">
+    <div class="row" id="modeRow" style="margin-bottom:10px;">
       <label>โหมด:</label>
-      <select id="modeSel" onchange="onModeChange()">
+      <select id="modeSel" onchange="onModeChange()" style="flex:1; max-width:280px;">
         <option value="pre">📘 ก่อนเรียน (Pre-test)</option>
         <option value="post">📗 หลังเรียน (Post-test)</option>
       </select>
       <span id="modeTag"></span>
-      <label style="margin-left:auto;">📺 รหัสห้อง:</label>
-      <input id="roomCode1" style="width:90px;" onchange="setRoom(this.value)">
-      <span class="muted" id="liveSendStat">ส่งจอใหญ่: ปิด</span>
     </div>
-    <div class="row">
-      <button class="act green" id="btnBegin" onclick="startExam()" style="font-size:16px; font-weight:800; padding:11px 22px;">🚀 เริ่มสอบ</button>
+    <div class="ctl-main">
+      <button class="act green" id="btnBegin" onclick="startExam()">🚀 เริ่มสอบ</button>
       <button class="act" id="btnStart" onclick="startCam()">▶️ เปิดกล้อง</button>
       <button class="act gray" id="btnStop" onclick="stopCam()" style="display:none;">⏸️ ปิดกล้อง</button>
-      <span class="qbadge" id="examClock" style="display:none; color:var(--green);">⏱ ๐๐:๐๐</span>
-      <span class="qbadge">ข้อ <span id="qnum">๑</span>/<span id="qtotal">๑๐</span></span>
+      <button class="act amber" onclick="finishTest()">✅ จบ/บันทึกผล</button>
+    </div>
+    <div class="ctl-step">
       <button class="act sm scanHide" onclick="changeQ(-1)">◀ ก่อน</button>
+      <span class="qbadge">ข้อ <span id="qnum">๑</span>/<span id="qtotal">๑๐</span></span>
+      <span class="qbadge" id="examClock" style="display:none; color:var(--green);">⏱ ๐๐:๐๐</span>
       <button class="act sm scanHide" onclick="changeQ(1)">ถัดไป ▶</button>
-      <button class="act red sm scanHide" onclick="clearQ()">ล้างข้อนี้</button>
-      <label class="scanHide" style="white-space:nowrap;"><input type="checkbox" id="scanSound" checked> 🔊 เสียงสแกนติด</label>
-      <button class="act purple scanHide" onclick="openPresent()">🔎 แสดงคำถามเต็มจอ</button>
-      <button class="act green" onclick="finishTest()">✅ จบ/บันทึกผล</button>
+    </div>
+    <div class="ctl-sub">
+      <button class="act red sm scanHide" onclick="clearQ()">🗑️ ล้างข้อนี้</button>
+      <button class="act purple sm scanHide" onclick="openPresent()">🔎 คำถามเต็มจอ</button>
+      <label class="scanHide" style="white-space:nowrap;"><input type="checkbox" id="scanSound" checked> 🔊 เสียงสแกน</label>
       <span class="muted" id="scanStat">ยังไม่เปิดกล้อง</span>
     </div>
+    <details id="liveLink">
+      <summary>📺 เชื่อมต่อจอใหญ่ · <span id="liveSendStat">ส่งจอใหญ่: ปิด</span></summary>
+      <div class="row" style="margin-top:8px;">
+        <label>รหัสห้อง:</label>
+        <input id="roomCode1" style="width:120px;" onchange="setRoom(this.value)">
+        <span class="muted">เปิดแท็บ 📺 จอใหญ่ บนคอม เลือกครูคนเดียวกัน = เชื่อมกันอัตโนมัติ</span>
+      </div>
+    </details>
   </div>
 
   <div class="panel" id="qShowPanel"></div>
