@@ -47,6 +47,23 @@
   .bigstage .bstu{ border-width:2px; padding:6px 4px; border-radius:10px;}
   .bigstage .bstu .bn{ font-size:12px;} .bigstage .bstu .bnm{ font-size:12px;}
   .bigstage .bstu .bans{ font-size:30px;}
+  /* จอใหญ่บนคอมจอกว้าง: โจทย์+ตัวเลือกซ้าย · กริดนักเรียนขวา — เห็นครบไม่ต้องเลื่อน ไม่เหลือที่ว่างข้างจอ */
+  @media (min-width:1100px){
+    #liveView.view{ max-width:1760px; }
+    #liveStage{ display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr);
+      grid-template-areas:"top top" "bar bar" "q grid" "ch grid"; grid-template-rows:auto auto auto 1fr;
+      column-gap:2vw; align-items:start; }
+    #liveStage .pv-top{ grid-area:top; }
+    #liveStage .pv-progress{ grid-area:bar; }
+    #liveStage .pv-question{ grid-area:q; font-size:clamp(24px,2.5vw,42px); }
+    #liveStage .pv-choices{ grid-area:ch; gap:1.2vh; }
+    #liveStage .pv-choice{ font-size:clamp(18px,1.8vw,30px); border-radius:14px; padding:1vh 1.4vw; }
+    #liveStage .big-grid{ grid-area:grid; margin-top:1.6vh; align-content:start;
+      grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:6px;
+      max-height:calc(100vh - 320px); min-height:300px; overflow-y:auto; padding-right:4px; }
+    #liveStage .bstu{ padding:4px 3px; }
+    #liveStage .bstu .bans{ font-size:24px; }
+  }
 
   /* gate เลือกครูก่อนเริ่ม */
   #gate{ position:fixed; inset:0; background:linear-gradient(135deg,#1b2540,#2d3a63); z-index:2000; display:none; align-items:center; justify-content:center; padding:16px;}
