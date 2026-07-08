@@ -31,8 +31,8 @@
   /* sheet print */
   .slips{} .slip{display:inline-block;vertical-align:top;border:1px dashed #999;margin:1mm;padding:3mm;position:relative;page-break-inside:avoid;}
   .slip .sheet{position:relative;width:1000px;height:1414px;transform-origin:top left;}
-  .slip .mk{position:absolute;} .slip .mk svg{width:100%;height:100%;display:block;}
-  .slip .bub{position:absolute;border:2.5px solid #111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Kanit';font-weight:700;color:#aaa;}
+  .slip .mk{position:absolute;-webkit-print-color-adjust:exact;print-color-adjust:exact;} .slip .mk svg{width:100%;height:100%;display:block;}
+  .slip .bub{position:absolute;border:2.5px solid #111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Kanit';font-weight:700;color:#aaa;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .slip .qlab{position:absolute;font-family:'Kanit';font-weight:700;} .slip .tx{position:absolute;font-family:'Sarabun';}
   .slip .wl{position:absolute;border-bottom:2px solid #333;}
   @media print{ header,.no-print{display:none!important;} .view{display:none!important;padding:0;max-width:none;} .view.printing{display:block!important;} }
@@ -135,10 +135,8 @@
 <script src="lib/aruco.js"></script>
 <script src="omr_lib.js"></script>
 <script>
-const DICT='ARUCO_MIP_36h12';
-const detector=new AR.Detector({dictionaryName:DICT, maxHammingDistance:4});
-const dict=new AR.Dictionary(DICT);
-const OMR_CORNER={246:'tl',247:'tr',248:'br',249:'bl'}, CHO=['ก','ข','ค','ง'];
+const CHO=['ก','ข','ค','ง'];
+const cvbuf={}; // ที่พักภาพถาวรสำหรับ OMR.detectCorners (CV มาจาก lib/cv.js)
 const GAS='https://script.google.com/macros/s/AKfycbwTID5HorZf1_V3llzh7fpcd_oW96XTQVAvBYPZ1byHu0wyZFTGL8CFA8B5lk9STfku/exec';
 let teacher='', omrTpl=OMR.template(10), rows=[], db=null;
 
@@ -162,6 +160,14 @@ let genRoster=[];
 function gTypeChange(){ document.getElementById('gPersonRow').style.display=document.getElementById('gType').value==='person'?'flex':'none'; }
 async function loadClasses(){ const sel=document.getElementById('classSel'); sel.innerHTML='<option>โหลด...</option>'; try{ const c=await jsonp({action:'classes'}); sel.innerHTML='<option value="">— เลือกห้อง —</option>'+c.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join(''); }catch(e){ sel.innerHTML='<option>โหลดไม่ได้</option>'; } }
 async function loadStudents(){ const cid=document.getElementById('classSel').value; if(!cid){alert('เลือกห้องก่อน');return;} try{ const s=await jsonp({action:'students',class:cid}); genRoster=s.map(x=>({id:x.number,name:x.name})); document.getElementById('gStu').textContent='ได้ '+genRoster.length+' คน'; }catch(e){ alert('ดึงรายชื่อไม่ได้'); } }
+function drawNumGrid(sh,tpl,num){ // วาดตารางฝนเลขที่ 2 หลัก + ฝนหลักของนักเรียนให้อัตโนมัติ
+  const g=tpl.numGrid, tens=Math.floor((num||0)/10)%10, units=(num||0)%10, fill=[tens,units];
+  const lab=document.createElement('div'); lab.className='tx'; lab.style.cssText='left:90px;top:'+(g.rows[0].y-12)+'px;font-size:24px;font-family:Kanit;font-weight:700;'; lab.textContent='เลขที่'; sh.appendChild(lab);
+  g.rows.forEach((row,ri)=>{ for(let d=0;d<10;d++){ const x=OMR.numX(tpl,d),r=g.r,on=(d===fill[ri]);
+    const b=document.createElement('div'); b.className='bub';
+    b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:'+Math.round(r*1.1)+'px;'+(on?'background:#111;color:#111;':'');
+    b.textContent=String(d); sh.appendChild(b); } });
+}
 function buildSheets(){
   const nQ=+document.getElementById('gNQ').value, type=document.getElementById('gType').value, size=document.getElementById('gSize').value;
   const tpl=OMR.template(nQ); const wrap=document.getElementById('slips'); wrap.innerHTML='';
@@ -171,10 +177,10 @@ function buildSheets(){
   list.forEach(stu=>{
     const slip=document.createElement('div'); slip.className='slip'; slip.style.width=W; slip.style.height=({'4':'138mm','2':'190mm','1':'283mm'})[size];
     const sh=document.createElement('div'); sh.className='sheet'; sh.style.transform='scale('+SC+')';
-    const place=(id,cx,cy,sz)=>{ const d=document.createElement('div'); d.className='mk'; d.style.cssText='left:'+(cx-sz/2)+'px;top:'+(cy-sz/2)+'px;width:'+sz+'px;height:'+sz+'px;'; d.innerHTML=dict.generateSVG(id); sh.appendChild(d); };
-    for(const k in tpl.corners){ const c=tpl.corners[k]; place(c.id,c.cx,c.cy,tpl.markerSize); }
-    if(type==='person'){ place(stu.id,tpl.student.cx,tpl.student.cy,tpl.student.size);
-      const nm=document.createElement('div'); nm.className='tx'; nm.style.cssText='left:190px;top:215px;font-size:30px;font-family:Kanit;'; nm.textContent='เลขที่ '+stu.id+'  '+(stu.name||''); sh.appendChild(nm);
+    const placeSq=(cx,cy,sz)=>{ const d=document.createElement('div'); d.className='mk'; d.style.cssText='left:'+(cx-sz/2)+'px;top:'+(cy-sz/2)+'px;width:'+sz+'px;height:'+sz+'px;background:#000;'; sh.appendChild(d); };
+    for(const k in tpl.corners){ const c=tpl.corners[k]; placeSq(c.cx,c.cy,tpl.markerSize); }
+    if(type==='person'){ drawNumGrid(sh,tpl,stu.id);
+      const nm=document.createElement('div'); nm.className='tx'; nm.style.cssText='left:120px;top:300px;font-size:26px;font-family:Kanit;'; nm.textContent='เลขที่ '+stu.id+'  '+(stu.name||''); sh.appendChild(nm);
     } else {
       // ช่องเขียนชื่อเอง
       const mk=(label,x,y,w)=>{ const t=document.createElement('div'); t.className='tx'; t.style.cssText='left:'+x+'px;top:'+y+'px;font-size:26px;'; t.textContent=label; sh.appendChild(t); const l=document.createElement('div'); l.className='wl'; l.style.cssText='left:'+(x+ (''+label).length*16+10)+'px;top:'+(y+30)+'px;width:'+w+'px;'; sh.appendChild(l); };
@@ -203,16 +209,25 @@ function stopCam(){ running=false; if(stream)stream.getTracks().forEach(t=>t.sto
 function center(c){return {x:(c[0].x+c[1].x+c[2].x+c[3].x)/4,y:(c[0].y+c[1].y+c[2].y+c[3].y)/4};}
 function sample(img,cx,cy,r){const d=img.data,W=img.width,H=img.height;let s=0,n=0,r2=r*r;for(let y=Math.max(0,cy-r|0);y<=Math.min(H-1,cy+r);y++)for(let x=Math.max(0,cx-r|0);x<=Math.min(W-1,cx+r);x++){const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy>r2)continue;const i=(y*W+x)*4;s+=(d[i]+d[i+1]+d[i+2])/3;n++;}return n?s/n:255;}
 function med(a){if(!a.length)return 0;const b=a.slice().sort((x,y)=>x-y);return b[b.length>>1];}
+function readNum(img,h,tpl,white){ // อ่านตารางฝนเลขที่ 2 หลัก (ว่าง=null)
+  const g=tpl.numGrid, digs=[];
+  for(const row of g.rows){ const fills=[];
+    for(let d=0;d<10;d++){ const p=OMR.applyH(h,OMR.numX(tpl,d),row.y); const pr=OMR.applyH(h,OMR.numX(tpl,d)+g.r,row.y); const rImg=Math.max(3,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8); fills.push((white-sample(img,p.x,p.y,rImg))/white); }
+    let b=0;for(let d=1;d<10;d++)if(fills[d]>fills[b])b=d; let s=-1;for(let d=0;d<10;d++)if(d!==b&&(s<0||fills[d]>fills[s]))s=d;
+    digs.push((fills[b]>=0.30&&fills[b]-fills[s]>=0.12)?b:null); }
+  if(digs.some(d=>d===null)) return null;
+  const num=digs[0]*10+digs[1]; return num>0?num:null;
+}
 function readSheet(img){
-  const tpl=omrTpl; let markers=[]; try{markers=detector.detect(img);}catch(e){return{ok:false,cf:0};}
-  const found={}; let student=null;
-  markers.forEach(mk=>{const c=center(mk.corners); if(OMR_CORNER[mk.id])found[OMR_CORNER[mk.id]]=c; else if(mk.id>=1&&mk.id<=240)student={id:mk.id,c};});
-  const cf=['tl','tr','br','bl'].filter(k=>found[k]).length; if(cf<4)return{ok:false,cf};
+  const tpl=omrTpl; let det; try{det=OMR.detectCorners(img,CV,cvbuf);}catch(e){return{ok:false,cf:0};}
+  if(!det.corners) return {ok:false,cf:Math.min(4,det.n)};
+  const found=det.corners, cf=4;
   const src=['tl','tr','br','bl'].map(k=>({x:tpl.corners[k].cx,y:tpl.corners[k].cy})); const dst=['tl','tr','br','bl'].map(k=>found[k]);
   const h=OMR.computeH(src,dst); if(!h)return{ok:false,cf};
   const whites=[]; tpl.rows.forEach(r=>{const p=OMR.applyH(h,OMR.whiteXOf(tpl,r.col),r.y);whites.push(sample(img,p.x,p.y,8));}); const white=med(whites)||220;
   const answers=[]; tpl.rows.forEach(row=>{const fills=[]; for(let c=0;c<4;c++){const x=OMR.colX(tpl,row.col,c);const p=OMR.applyH(h,x,row.y);const pr=OMR.applyH(h,x+tpl.r,row.y);const rImg=Math.max(4,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8);fills.push((white-sample(img,p.x,p.y,rImg))/white);} let b=0;for(let c=1;c<4;c++)if(fills[c]>fills[b])b=c; let s=-1;for(let c=0;c<4;c++)if(c!==b&&(s<0||fills[c]>fills[s]))s=c; answers.push((fills[b]>=0.28&&fills[b]-fills[s]>=0.10)?CHO[b]:''); });
-  return {ok:true,h,studentId:student?student.id:null,answers,found,tpl};
+  const studentId=readNum(img,h,tpl,white);
+  return {ok:true,h,studentId,answers,found,tpl};
 }
 // ดัดภาพให้แบน (canonical 1000x1414 → ย่อ) สำหรับเก็บภาพ เห็นชื่อที่เขียน
 function warpImage(img,h){

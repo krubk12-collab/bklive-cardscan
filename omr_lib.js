@@ -1,4 +1,7 @@
-/* OMR core: homography (4 จุด) + เทมเพลตจัดวางวงฝนอัตโนมัติ (ไม่ซ้อนกัน) */
+/* OMR core: homography (4 จุด) + เทมเพลตจัดวางวงฝนอัตโนมัติ (ไม่ซ้อนกัน)
+   v2: มุมกระดาษใช้ "สี่เหลี่ยมทึบดำ" (แบบ ZipGrade) แทน ArUco — เล็กลง สวยขึ้น
+       ตรวจจับด้วย CV pipeline (grayscale→adaptiveThreshold→findContours→approxPolyDP)
+       เลขที่นักเรียน = ตารางฝนเลข (numGrid) พิมพ์ฝนอัตโนมัติในโหมดรายคน */
 (function(root){
   function solve(A, b){
     const n=b.length;
@@ -22,7 +25,7 @@
 
   // เทมเพลตกระดาษ (canonical 1000x1414) — คำนวณคอลัมน์/ขนาด/ระยะ ไม่ให้วงซ้อน
   function template(nQ){
-    const W=1000, H=1414, m=150;
+    const W=1000, H=1414, m=80;   // m = ขนาดสี่เหลี่ยมมุม (เล็กลงจากเดิม 150)
     const cols = nQ<=12 ? 1 : (nQ<=24 ? 2 : 3);
     const rowsPerCol = Math.ceil(nQ/cols);
     const top=370, bottomLimit=1205;
@@ -36,8 +39,9 @@
     // รัศมีวง: จำกัดด้วยทั้งแนวตั้ง(step)และแนวนอน(bstep)
     const r = Math.max(13, Math.min(26, step*0.40, bstep*0.42));
     const tpl={ W,H, markerSize:m,
-      corners:{ tl:{id:246,cx:90,cy:90}, tr:{id:247,cx:910,cy:90}, br:{id:248,cx:910,cy:1324}, bl:{id:249,cx:90,cy:1324} },
-      student:{ cx:500, cy:120, size:140 },
+      corners:{ tl:{cx:90,cy:90}, tr:{cx:910,cy:90}, br:{cx:910,cy:1324}, bl:{cx:90,cy:1324} },
+      // ตารางฝนเลขที่ 2 หลัก (หลักสิบ/หลักหน่วย) วางในแถบว่างเหนือหัวกระดาษ (y145,177) — ไม่ชนคำถาม(370)
+      numGrid:{ r:11, x0:250, dx:64, rows:[{y:145},{y:177}] },
       r, cols, rowsPerCol, colBase, choiceDX, labelW, rows:[], nQ };
     for(let i=0;i<nQ;i++){ const c=Math.floor(i/rowsPerCol), rr=i%rowsPerCol; tpl.rows.push({col:c, y:top+rr*step}); }
     tpl.whiteX = colBase[0] + 12; // จุดอ้างอิงสีขาว (ในพื้นที่ label ที่ว่าง) — ผู้เรียกควรใช้ colBase[row.col]+12 ต่อแถว
@@ -49,6 +53,48 @@
   function labelX(tpl, col){ return tpl.colBase[col] + 6; }
   // จุดอ้างอิงสีขาวต่อแถว (ในพื้นที่ label)
   function whiteXOf(tpl, col){ return tpl.colBase[col] + 12; }
+  // พิกัด x ของวงเลขในตารางฝนเลขที่ (digit 0..9)
+  function numX(tpl, digit){ return tpl.numGrid.x0 + digit*tpl.numGrid.dx; }
 
-  root.OMR={ computeH, applyH, template, colX, labelX, whiteXOf };
+  /* ตรวจจับสี่เหลี่ยมทึบ 4 มุม แล้วจับคู่ tl/tr/br/bl ตามตำแหน่งสุดขอบ
+     img = {width,height,data(RGBA)} (ImageData ก็ได้) ; CV = ไลบรารีของ js-aruco2 ; buf = ที่พักภาพถาวร */
+  function detectCorners(img, CV, buf){
+    buf.grey  = buf.grey  || new CV.Image();
+    buf.thres = buf.thres || new CV.Image();
+    buf.bin   = buf.bin   || new CV.Image();
+    CV.grayscale(img, buf.grey);
+    CV.adaptiveThreshold(buf.grey, buf.thres, 2, 7);
+    const contours = CV.findContours(buf.thres, buf.bin);
+    const w=img.width, h=img.height;
+    const minEdge=w*0.012, maxEdge=w*0.17;
+    const cands=[];
+    for(let i=0;i<contours.length;i++){
+      const c=contours[i];
+      if(c.length<8) continue;
+      const poly=CV.approxPolyDP(c, c.length*0.05);
+      if(poly.length!==4 || !CV.isContourConvex(poly)) continue;
+      let mn=Infinity, mx=0;
+      for(let k=0;k<4;k++){ const a=poly[k], b=poly[(k+1)%4]; const e=Math.hypot(a.x-b.x,a.y-b.y); if(e<mn)mn=e; if(e>mx)mx=e; }
+      if(mn<minEdge || mx>maxEdge) continue;   // ขนาดต้องพอเหมาะ (ตัดกล่องหัวกระดาษที่ใหญ่)
+      if(mx/mn>1.6) continue;                    // ต้องเกือบจตุรัส (ตัดกล่องยาว/ขีดเส้น)
+      const cx=(poly[0].x+poly[1].x+poly[2].x+poly[3].x)/4;
+      const cy=(poly[0].y+poly[1].y+poly[2].y+poly[3].y)/4;
+      cands.push({cx,cy,s:(mn+mx)/2});
+    }
+    const n=cands.length;
+    if(n<4) return {corners:null, n};
+    const ext=(f,want)=>{ let best=cands[0], bv=f(cands[0]);
+      for(let i=1;i<n;i++){ const v=f(cands[i]); if((want==='min'&&v<bv)||(want==='max'&&v>bv)){bv=v;best=cands[i];} } return best; };
+    const tl=ext(p=>p.cx+p.cy,'min'), br=ext(p=>p.cx+p.cy,'max');
+    const tr=ext(p=>p.cx-p.cy,'max'), bl=ext(p=>p.cx-p.cy,'min');
+    const four=[tl,tr,br,bl];
+    for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) if(four[i]===four[j]) return {corners:null, n}; // ต้องเป็น 4 จุดต่างกัน
+    const ss=four.map(p=>p.s);
+    if(Math.max(...ss)/Math.min(...ss) > 2.5) return {corners:null, n};   // มุมจริงขนาดใกล้กัน
+    let area=0; for(let i=0;i<4;i++){ const a=four[i], b=four[(i+1)%4]; area+=a.cx*b.cy-b.cx*a.cy; } area=Math.abs(area)/2;
+    if(area < w*h*0.10) return {corners:null, n};   // สี่เหลี่ยมต้องกินพื้นที่พอ (จ่อให้เต็มใบ)
+    return {corners:{ tl:{x:tl.cx,y:tl.cy}, tr:{x:tr.cx,y:tr.cy}, br:{x:br.cx,y:br.cy}, bl:{x:bl.cx,y:bl.cy} }, n};
+  }
+
+  root.OMR={ computeH, applyH, template, colX, labelX, whiteXOf, numX, detectCorners };
 })(typeof module!=='undefined'?module.exports:(this.OMR={}, this));
