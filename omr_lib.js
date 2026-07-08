@@ -40,8 +40,8 @@
     const r = Math.max(13, Math.min(26, step*0.40, bstep*0.42));
     const tpl={ W,H, markerSize:m,
       corners:{ tl:{cx:90,cy:90}, tr:{cx:910,cy:90}, br:{cx:910,cy:1324}, bl:{cx:90,cy:1324} },
-      // ตารางฝนเลขที่ 2 หลัก (หลักสิบ/หลักหน่วย) วางในแถบว่างเหนือหัวกระดาษ (y145,177) — ไม่ชนคำถาม(370)
-      numGrid:{ r:11, x0:250, dx:64, rows:[{y:145},{y:177}] },
+      // ตารางฝนเลขที่ 2 หลัก (หลักสิบ/หลักหน่วย) — วงใหญ่พอฝนมือ, มีที่ว่างซ้ายสำหรับป้าย, จบก่อนคำถาม(370)
+      numGrid:{ r:17, x0:290, dx:64, rows:[{y:280},{y:326}] },
       r, cols, rowsPerCol, colBase, choiceDX, labelW, rows:[], nQ };
     for(let i=0;i<nQ;i++){ const c=Math.floor(i/rowsPerCol), rr=i%rowsPerCol; tpl.rows.push({col:c, y:top+rr*step}); }
     tpl.whiteX = colBase[0] + 12; // จุดอ้างอิงสีขาว (ในพื้นที่ label ที่ว่าง) — ผู้เรียกควรใช้ colBase[row.col]+12 ต่อแถว

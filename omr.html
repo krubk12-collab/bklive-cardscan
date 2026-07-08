@@ -57,7 +57,7 @@
 </div></div>
 
 <header>
-  <h1>🧾 ตรวจกระดาษคำตอบ OMR</h1>
+  <h1><img src="assets/logo.png" alt="" style="height:32px;vertical-align:-9px;margin-right:7px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));">ตรวจกระดาษคำตอบ OMR</h1>
   <span id="teacherBadge" onclick="showGate()">👩‍🏫 —</span>
   <div class="tabs">
     <button id="t_scan" class="active" onclick="show('scan')">📷 สแกน</button>
@@ -160,13 +160,24 @@ let genRoster=[];
 function gTypeChange(){ document.getElementById('gPersonRow').style.display=document.getElementById('gType').value==='person'?'flex':'none'; }
 async function loadClasses(){ const sel=document.getElementById('classSel'); sel.innerHTML='<option>โหลด...</option>'; try{ const c=await jsonp({action:'classes'}); sel.innerHTML='<option value="">— เลือกห้อง —</option>'+c.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join(''); }catch(e){ sel.innerHTML='<option>โหลดไม่ได้</option>'; } }
 async function loadStudents(){ const cid=document.getElementById('classSel').value; if(!cid){alert('เลือกห้องก่อน');return;} try{ const s=await jsonp({action:'students',class:cid}); genRoster=s.map(x=>({id:x.number,name:x.name})); document.getElementById('gStu').textContent='ได้ '+genRoster.length+' คน'; }catch(e){ alert('ดึงรายชื่อไม่ได้'); } }
-function drawNumGrid(sh,tpl,num){ // วาดตารางฝนเลขที่ 2 หลัก + ฝนหลักของนักเรียนให้อัตโนมัติ
-  const g=tpl.numGrid, tens=Math.floor((num||0)/10)%10, units=(num||0)%10, fill=[tens,units];
-  const lab=document.createElement('div'); lab.className='tx'; lab.style.cssText='left:90px;top:'+(g.rows[0].y-12)+'px;font-size:24px;font-family:Kanit;font-weight:700;'; lab.textContent='เลขที่'; sh.appendChild(lab);
-  g.rows.forEach((row,ri)=>{ for(let d=0;d<10;d++){ const x=OMR.numX(tpl,d),r=g.r,on=(d===fill[ri]);
-    const b=document.createElement('div'); b.className='bub';
-    b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:'+Math.round(r*1.1)+'px;'+(on?'background:#111;color:#111;':'');
-    b.textContent=String(d); sh.appendChild(b); } });
+function drawHeader(sh){ // โลโก้ + ชื่อระบบ + ชื่อโรงเรียน (เว้น TL marker ที่กิน x50..130)
+  const im=document.createElement('img'); im.src='assets/logo.png';
+  im.style.cssText='position:absolute;left:150px;top:26px;width:100px;height:110px;object-fit:contain;'; sh.appendChild(im);
+  const t=document.createElement('div'); t.className='tx'; t.style.cssText='left:270px;top:30px;font-size:44px;font-family:Kanit;font-weight:800;color:#111;'; t.textContent='กระดาษคำตอบ'; sh.appendChild(t);
+  const s=document.createElement('div'); s.className='tx'; s.style.cssText='left:272px;top:96px;font-size:21px;color:#333;'; s.textContent='โรงเรียนชุมชนวัดบางโค (แม่นางวิทย์อุปการี)'; sh.appendChild(s);
+}
+function drawNumGrid(sh,tpl,num){ // ตารางฝนเลขที่ 2 หลัก — num=null วงว่างให้นักเรียนฝนเอง / num=เลข ฝนพิมพ์ให้เลย
+  const g=tpl.numGrid, fill=num!=null?[Math.floor(num/10)%10,num%10]:[null,null], names=['หลักสิบ','หลักหน่วย'];
+  const hd=document.createElement('div'); hd.className='tx';
+  hd.style.cssText='left:130px;top:'+(g.rows[0].y-g.r-36)+'px;font-size:22px;font-family:Kanit;font-weight:700;';
+  hd.textContent=num!=null?'เลขที่ (ฝนให้แล้ว ✓)':'ฝนเลขที่ของนักเรียน ● ให้ทึบเต็มวง'; sh.appendChild(hd);
+  g.rows.forEach((row,ri)=>{
+    const lb=document.createElement('div'); lb.className='tx';
+    lb.style.cssText='left:130px;top:'+(row.y-14)+'px;font-size:21px;font-family:Kanit;font-weight:600;color:#444;'; lb.textContent=names[ri]; sh.appendChild(lb);
+    for(let d=0;d<10;d++){ const x=OMR.numX(tpl,d),r=g.r,on=(d===fill[ri]);
+      const b=document.createElement('div'); b.className='bub';
+      b.style.cssText='left:'+(x-r)+'px;top:'+(row.y-r)+'px;width:'+(2*r)+'px;height:'+(2*r)+'px;font-size:'+Math.round(r*1.1)+'px;'+(on?'background:#111;color:#111;':'');
+      b.textContent=String(d); sh.appendChild(b); } });
 }
 function buildSheets(){
   const nQ=+document.getElementById('gNQ').value, type=document.getElementById('gType').value, size=document.getElementById('gSize').value;
@@ -179,13 +190,16 @@ function buildSheets(){
     const sh=document.createElement('div'); sh.className='sheet'; sh.style.transform='scale('+SC+')';
     const placeSq=(cx,cy,sz)=>{ const d=document.createElement('div'); d.className='mk'; d.style.cssText='left:'+(cx-sz/2)+'px;top:'+(cy-sz/2)+'px;width:'+sz+'px;height:'+sz+'px;background:#000;'; sh.appendChild(d); };
     for(const k in tpl.corners){ const c=tpl.corners[k]; placeSq(c.cx,c.cy,tpl.markerSize); }
-    if(type==='person'){ drawNumGrid(sh,tpl,stu.id);
-      const nm=document.createElement('div'); nm.className='tx'; nm.style.cssText='left:120px;top:300px;font-size:26px;font-family:Kanit;'; nm.textContent='เลขที่ '+stu.id+'  '+(stu.name||''); sh.appendChild(nm);
+    drawHeader(sh);
+    if(type==='person'){
+      const nm=document.createElement('div'); nm.className='tx'; nm.style.cssText='left:130px;top:150px;font-size:27px;font-family:Kanit;font-weight:600;'; nm.textContent='เลขที่ '+stu.id+'   ชื่อ '+(stu.name||'........................................'); sh.appendChild(nm);
+      drawNumGrid(sh,tpl,stu.id);
     } else {
-      // ช่องเขียนชื่อเอง
+      // ช่องเขียนชื่อเอง + ตารางฝนเลขที่ (นักเรียนฝนเอง)
       const mk=(label,x,y,w)=>{ const t=document.createElement('div'); t.className='tx'; t.style.cssText='left:'+x+'px;top:'+y+'px;font-size:26px;'; t.textContent=label; sh.appendChild(t); const l=document.createElement('div'); l.className='wl'; l.style.cssText='left:'+(x+ (''+label).length*16+10)+'px;top:'+(y+30)+'px;width:'+w+'px;'; sh.appendChild(l); };
-      mk('ชื่อ-สกุล',70,200,560);
-      mk('ชั้น',70,250,150); mk('เลขที่',360,250,150);
+      mk('ชื่อ-สกุล',130,142,500);
+      mk('ชั้น',130,190,130); mk('เลขที่',390,190,110);
+      drawNumGrid(sh,tpl,null);
     }
     const bfont=Math.round(tpl.r*1.05);
     tpl.rows.forEach((row,qi)=>{ const lx=OMR.labelX(tpl,row.col);
@@ -215,8 +229,9 @@ function readNum(img,h,tpl,white){ // อ่านตารางฝนเลข
     for(let d=0;d<10;d++){ const p=OMR.applyH(h,OMR.numX(tpl,d),row.y); const pr=OMR.applyH(h,OMR.numX(tpl,d)+g.r,row.y); const rImg=Math.max(3,Math.hypot(pr.x-p.x,pr.y-p.y)*0.8); fills.push((white-sample(img,p.x,p.y,rImg))/white); }
     let b=0;for(let d=1;d<10;d++)if(fills[d]>fills[b])b=d; let s=-1;for(let d=0;d<10;d++)if(d!==b&&(s<0||fills[d]>fills[s]))s=d;
     digs.push((fills[b]>=0.30&&fills[b]-fills[s]>=0.12)?b:null); }
-  if(digs.some(d=>d===null)) return null;
-  const num=digs[0]*10+digs[1]; return num>0?num:null;
+  if(digs[1]===null) return null;                   // หลักหน่วยต้องฝนชัด ไม่งั้นถือว่าไม่ระบุเลขที่
+  const num=(digs[0]===null?0:digs[0])*10+digs[1];  // หลักสิบว่าง=0 → เลขที่ 1-9 ฝนหลักเดียวได้
+  return num>0?num:null;
 }
 function readSheet(img){
   const tpl=omrTpl; let det; try{det=OMR.detectCorners(img,CV,cvbuf);}catch(e){return{ok:false,cf:0};}
