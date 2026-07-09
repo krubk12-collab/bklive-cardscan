@@ -577,6 +577,18 @@
     <div class="scroll" id="itemTable"></div>
   </div>
   <div class="panel scroll" id="resTable"></div>
+  <div class="panel">
+    <h2>🧾 ตรวจทานข้อมูลการสอบ</h2>
+    <p class="muted">เปิดตารางข้อมูลรายคน/รายข้อ ของชุดข้อสอบ + กลุ่มที่เลือกอยู่ (ต้องใช้รหัสผู้ดูแล)</p>
+    <div class="row">
+      <button class="act gray sm" onclick="openAdjust()">🔐 เปิดตารางตรวจทาน</button>
+      <select id="adjMode" onchange="renderAdjust()" style="display:none;">
+        <option value="pre">ก่อนเรียน</option><option value="post">หลังเรียน</option>
+      </select>
+    </div>
+    <div id="adjustBox" style="display:none; margin-top:10px; overflow:auto; max-height:62vh; border:1px solid #e1e5ee; border-radius:10px;"></div>
+    <p class="muted" id="adjStat" style="margin-top:6px;"></p>
+  </div>
 </div>
 
 <!-- ============ LIVE VIEWER (จอใหญ่บนคอม) ============ -->
@@ -736,18 +748,6 @@
       <button class="act green sm" id="sheetLinkBtn" style="display:none;" onclick="window.open(this.dataset.url,'_blank')">📄 เปิด Google Sheet ที่ใช้งาน</button>
     </div>
     <div id="sysinfoBox" class="muted">กด "โหลดข้อมูล" เพื่อดูชีตที่ใช้เก็บข้อมูล · ครูที่เข้าใช้ระบบแล้ว · log การใช้งานล่าสุด</div>
-  </div>
-  <div class="panel">
-    <h2>🧾 ตรวจทานข้อมูลการสอบ</h2>
-    <p class="muted">เปิดตารางข้อมูลรายคนของชุดข้อสอบ + กลุ่มที่เลือกอยู่ (สำหรับผู้ดูแลระบบ)</p>
-    <div class="row">
-      <button class="act gray sm" onclick="openAdjust()">🔐 เปิดตารางตรวจทาน</button>
-      <select id="adjMode" onchange="renderAdjust()" style="display:none;">
-        <option value="pre">ก่อนเรียน</option><option value="post">หลังเรียน</option>
-      </select>
-    </div>
-    <div id="adjustBox" style="display:none; margin-top:10px; overflow:auto; max-height:62vh; border:1px solid #e1e5ee; border-radius:10px;"></div>
-    <p class="muted" id="adjStat" style="margin-top:6px;"></p>
   </div>
   <div class="panel">
     <h2>🗑️ ข้อมูล</h2>
@@ -934,7 +934,7 @@ function showView(v){
     const tb=document.getElementById('t_'+x); if(tb) tb.classList.toggle('active', x===v);
   });
   if(v==='q') renderQEditor();
-  if(v==='res') renderResults();
+  if(v==='res'){ renderResults(); renderAdjust(); }   // ตารางตรวจทาน (ถ้าเปิดอยู่) รีเฟรชตามชุด/กลุ่มที่เลือกล่าสุด
   if(v==='test'){ renderQShow(); renderLiveGrid(); }
   if(v==='live') startViewer();
   if(v==='timer'){ if(!Timer.running && !Timer.finished) timerSyncCustom(); }   // ซิงค์เฉพาะตอนยังไม่ได้เริ่มจับเวลา
@@ -1941,9 +1941,10 @@ function resetAll(){ if(confirm('ล้างทุกอย่างของ�
 let adjustUnlocked=false;
 function openAdjust(){
   if(!adjustUnlocked){
-    const p=prompt('🔐 ยืนยันสิทธิ์ผู้ดูแลอีกครั้ง — ใส่รหัสผ่าน:');
+    const p=prompt('🔐 เฉพาะผู้ดูแลระบบ — ใส่รหัสผ่าน:');
     if(p===null) return;
-    if(p.trim()!==SET_PASS){ alert('รหัสผ่านไม่ถูกต้อง'); return; }
+    const t=p.trim();
+    if(t!=='021916103' && t!==SET_PASS){ alert('รหัสผ่านไม่ถูกต้อง'); return; }
     adjustUnlocked=true;   // จำไว้จนกว่าจะปิด/รีเฟรชหน้า
   }
   document.getElementById('adjMode').style.display='inline-block';
