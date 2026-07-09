@@ -196,6 +196,13 @@
   .stu .ans{ font-family:'Kanit'; font-size:22px; font-weight:700; color:#c2c8d6; line-height:1.1;}
   .stu.answered{ border-color:var(--green); background:#eafaf2;}
   .stu.answered .ans{ color:var(--green);}
+  /* ตารางตรวจทานข้อมูลการสอบ (แท็บตั้งค่า) */
+  table.adj{ border-collapse:collapse; font-size:13px; width:max-content;}
+  table.adj th, table.adj td{ border:1px solid #e1e5ee; padding:2px 5px; text-align:center;}
+  table.adj tr:first-child th{ position:sticky; top:0; background:#f0f3fa; z-index:1;}
+  table.adj select{ border:1px solid #d5dae6; border-radius:6px; padding:1px 2px; font-size:13px; background:#fff;}
+  table.adj select.aok{ background:#eafaf2; border-color:var(--green);}
+  table.adj select.abad{ background:#fdecee; border-color:#e23b4e;}
   .qshow{ background:#fff7e8; border:1.5px solid var(--amber); border-radius:10px; padding:10px 12px; margin-bottom:10px;}
   .qshow .qt{ font-weight:700; font-size:15px; margin-bottom:6px;}
   .qshow .ch{ font-size:13.5px; margin:2px 0;}
@@ -729,6 +736,18 @@
       <button class="act green sm" id="sheetLinkBtn" style="display:none;" onclick="window.open(this.dataset.url,'_blank')">📄 เปิด Google Sheet ที่ใช้งาน</button>
     </div>
     <div id="sysinfoBox" class="muted">กด "โหลดข้อมูล" เพื่อดูชีตที่ใช้เก็บข้อมูล · ครูที่เข้าใช้ระบบแล้ว · log การใช้งานล่าสุด</div>
+  </div>
+  <div class="panel">
+    <h2>🧾 ตรวจทานข้อมูลการสอบ</h2>
+    <p class="muted">เปิดตารางข้อมูลรายคนของชุดข้อสอบ + กลุ่มที่เลือกอยู่ (สำหรับผู้ดูแลระบบ)</p>
+    <div class="row">
+      <button class="act gray sm" onclick="openAdjust()">🔐 เปิดตารางตรวจทาน</button>
+      <select id="adjMode" onchange="renderAdjust()" style="display:none;">
+        <option value="pre">ก่อนเรียน</option><option value="post">หลังเรียน</option>
+      </select>
+    </div>
+    <div id="adjustBox" style="display:none; margin-top:10px; overflow:auto; max-height:62vh; border:1px solid #e1e5ee; border-radius:10px;"></div>
+    <p class="muted" id="adjStat" style="margin-top:6px;"></p>
   </div>
   <div class="panel">
     <h2>🗑️ ข้อมูล</h2>
@@ -1550,7 +1569,7 @@ async function startCam(){
   setTimeout(()=>{ try{ document.getElementById('camWrap').scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} },200);
   loop();
 }
-function stopCam(){ running=false; document.body.classList.remove('scanning'); if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; renderMissing(); }
+function stopCam(){ running=false; document.body.classList.remove('scanning'); if(stream)stream.getTracks().forEach(t=>t.stop()); document.getElementById('btnStart').style.display='inline-block'; document.getElementById('btnStop').style.display='none'; document.getElementById('scanStat').textContent='ปิดกล้องแล้ว'; renderMissing(); if(scanDirty){ scanDirty=false; cloudSync(); } }
 
 function loop(){
   if(!running)return; requestAnimationFrame(loop);
@@ -1569,13 +1588,14 @@ function loop(){
     if(stu){ if(!sess[m.id])sess[m.id]={}; if(sess[m.id][curQ]!==ans){ sess[m.id][curQ]=ans; recorded=true; } }
     drawMarker(m.corners,m.id,ans,!!stu);
   });
-  if(recorded){ touchCur(); scanBeep(); }   // มีคำตอบใหม่ → ประทับเวลาให้ระบบซิงค์ + เสียงปิ๊งบอกว่าสแกนติดแล้ว
+  if(recorded){ touchCur(); scanBeep(); scanDirty=true; }   // มีคำตอบใหม่ → ประทับเวลาให้ระบบซิงค์ + เสียงปิ๊งบอกว่าสแกนติดแล้ว
   document.getElementById('scanStat').textContent='กำลังตรวจ... เห็น '+markers.length+' ใบ';
   renderLiveGrid();
   pushLive();
   if(now-lastSave>2500){ lastSave=now; save(); }   // เซฟลงเครื่องถี่ๆ กันข้อมูลหายถ้าปิดแอปกลางคัน
+  if(scanDirty && now-lastCloudPush>8000){ lastCloudPush=now; scanDirty=false; cloudSync(); }   // ดันคำตอบขึ้นคลาวด์ระหว่างสแกนด้วย — มือถือแบตหมดกลางคัน เปิดเครื่องไหนก็ดึงคำตอบคืนได้
 }
-let lastSave=0;
+let lastSave=0, lastCloudPush=0, scanDirty=false;
 function answerFromCorners(c){
   if(!c||c.length!==4)return null;
   const m=[{L:'ก',y:(c[0].y+c[1].y)/2},{L:'ข',y:(c[1].y+c[2].y)/2},{L:'ค',y:(c[2].y+c[3].y)/2},{L:'ง',y:(c[3].y+c[0].y)/2}];
@@ -1653,7 +1673,7 @@ async function finishTest(){
     showView('res');
   }
 }
-function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); touchCur(); renderLiveGrid(); save(); markDirty(); } }
+function clearQ(){ if(confirm('ล้างคำตอบข้อ '+(curQ+1)+' ('+(curMode==='pre'?'ก่อนเรียน':'หลังเรียน')+') ?')){ const sess=ensureSess(); Object.keys(sess).forEach(id=>{ if(sess[id])delete sess[id][curQ]; }); const cs=curSet(); if(cs){ cs.updatedAt=Date.now(); cs.sessClearedAt=cs.updatedAt; } renderLiveGrid(); save(); markDirty(); } }
 
 /* ===================== เรียลไทม์ จอใหญ่ (WebSocket) ===================== */
 let scannerWS=null, viewerWS=null, lastPush=0, lastPayload='';
@@ -1910,13 +1930,61 @@ function buildCards(){
 }
 
 /* ===================== ล้างข้อมูล ===================== */
-function resetSessions(){ if(confirm('ล้างผลสอบ (ก่อนเรียน+หลังเรียน) ของชุดนี้ ทุกกลุ่ม/ห้อง?\n(จะล้างบนทุกเครื่องเมื่อซิงค์)')){ const s=curSet(); if(s){ s.sessions={pre:{},post:{}}; s.sessionsAll={}; s.updatedAt=Date.now(); selectSet(s.id); } save(); renderResults(); renderLiveGrid(); markDirty(); } }
+function resetSessions(){ if(confirm('ล้างผลสอบ (ก่อนเรียน+หลังเรียน) ของชุดนี้ ทุกกลุ่ม/ห้อง?\n(จะล้างบนทุกเครื่องเมื่อซิงค์)')){ const s=curSet(); if(s){ s.sessions={pre:{},post:{}}; s.sessionsAll={}; s.updatedAt=Date.now(); s.sessClearedAt=s.updatedAt; selectSet(s.id); } save(); renderResults(); renderLiveGrid(); markDirty(); } }
 function resetAll(){ if(confirm('ล้างทุกอย่างของครูทุกคนในเครื่องนี้ กลับค่าเริ่มต้น?\n\n(หมายเหตุ: ข้อสอบที่ซิงค์ไว้บนคลาวด์จะถูกดึงกลับมาอัตโนมัติเมื่อเลือกชื่อครู — ข้อมูลบนคลาวด์ไม่หาย)')){ Object.keys(localStorage).filter(k=>k.indexOf('cardscan')===0).forEach(k=>localStorage.removeItem(k)); location.reload(); } }
 
 /* ===================== ☁️ ซิงค์ชุดข้อสอบข้ามเครื่อง (ผ่าน Google Apps Script ตัวเดิม) =====================
  * หลักการ: ทุกชุดมี updatedAt (เวลาแก้ล่าสุด) → ส่งทั้งหมดขึ้น GAS → GAS เก็บ/รวมโดย "ใครใหม่กว่าชนะทั้งชุด"
  * แล้วตอบสถานะรวมกลับมา → เครื่องนี้รวมกับของตัวเองอีกรอบ (ชุดที่มีแค่ในเครื่องไม่หาย)
  * เรียกอัตโนมัติ: ตอนเลือกครู, กดบันทึก, เพิ่ม/นำเข้า/เปลี่ยนชื่อ/ลบชุด, จบสอบ, แก้รายชื่อ · กดที่ป้าย ☁️ เพื่อซิงค์เอง */
+/* ===================== 🧾 ตรวจทานข้อมูลการสอบ (ผู้ดูแล — ปรับข้อมูลรายคน/รายข้อได้) ===================== */
+let adjustUnlocked=false;
+function openAdjust(){
+  if(!adjustUnlocked){
+    const p=prompt('🔐 ยืนยันสิทธิ์ผู้ดูแลอีกครั้ง — ใส่รหัสผ่าน:');
+    if(p===null) return;
+    if(p.trim()!==SET_PASS){ alert('รหัสผ่านไม่ถูกต้อง'); return; }
+    adjustUnlocked=true;   // จำไว้จนกว่าจะปิด/รีเฟรชหน้า
+  }
+  document.getElementById('adjMode').style.display='inline-block';
+  document.getElementById('adjustBox').style.display='block';
+  renderAdjust();
+}
+function renderAdjust(){
+  const box=document.getElementById('adjustBox'); if(!box || box.style.display==='none') return;
+  const mode=document.getElementById('adjMode').value;
+  const sess=(state.sessions&&state.sessions[mode])||{};
+  const nQ=state.questions.length;
+  if(!nQ || !state.roster.length){ box.innerHTML='<div class="muted" style="padding:10px;">ยังไม่มีข้อสอบหรือรายชื่อ — เลือกชุดข้อสอบ 📚 และกลุ่ม 👥 จากแถบบนก่อน</div>'; return; }
+  let h='<table class="adj"><tr><th style="text-align:left;">นักเรียน</th>';
+  for(let i=0;i<nQ;i++) h+='<th>'+thaiNum(i+1)+'</th>';
+  h+='<th>คะแนน</th></tr>';
+  state.roster.forEach(st=>{
+    h+='<tr><td style="text-align:left; white-space:nowrap;">'+thaiNum(st.id)+' '+esc(shortName(st.name||''))+'</td>';
+    for(let qi=0;qi<nQ;qi++){
+      const a=(sess[st.id]&&sess[st.id][qi])||'';
+      const cls=a?(a===state.questions[qi].correct?'aok':'abad'):'';
+      h+='<td><select class="'+cls+'" onchange="adjSet('+st.id+','+qi+',this)">'
+        +['','ก','ข','ค','ง'].map(c=>'<option value="'+c+'"'+(c===a?' selected':'')+'>'+(c||'–')+'</option>').join('')
+        +'</select></td>';
+    }
+    const sc=scoreOf(mode,st.id);
+    h+='<td id="adjsc_'+st.id+'"><b>'+(sc.answered?thaiNum(sc.score):'–')+'</b></td></tr>';
+  });
+  box.innerHTML=h+'</table>';
+}
+function adjSet(sid,qi,el){
+  const mode=document.getElementById('adjMode').value;
+  const sess=state.sessions[mode], val=el.value;
+  if(!sess[sid]) sess[sid]={};
+  if(val) sess[sid][qi]=val; else delete sess[sid][qi];
+  el.className = val ? (val===state.questions[qi].correct?'aok':'abad') : '';
+  touchCur(); save(); markDirty();   // ซิงค์ขึ้นคลาวด์เหมือนการสแกนปกติ
+  const sc=scoreOf(mode,sid);
+  const scEl=document.getElementById('adjsc_'+sid); if(scEl) scEl.innerHTML='<b>'+(sc.answered?thaiNum(sc.score):'–')+'</b>';
+  document.getElementById('adjStat').textContent='✅ ปรับปรุงข้อมูลแล้ว — แท็บ 📊 ผลสอบ อัปเดตตามทันที · สำเนาใน Google Sheets ไม่เปลี่ยนเอง ต้องกดส่งเข้าชีตใหม่จากแท็บผลสอบ';
+}
+
 let syncTimer=null, syncing=false, syncDirty=false;
 function setSyncStat(k,msg){
   const el=document.getElementById('syncStat'); if(!el) return;
@@ -1949,14 +2017,49 @@ async function cloudSync(manual){
   syncing=false;
   if(syncDirty){ clearTimeout(syncTimer); syncTimer=setTimeout(()=>cloudSync(),2500); }   // มีแก้เพิ่มระหว่างซิงค์ → ตามเก็บอีกรอบ
 }
+// รวมคำตอบ {pre:{},post:{}} จาก src เข้า dst — เติมเฉพาะข้อที่ dst ยังไม่มี (ของ dst ชนะเมื่อขัดกัน)
+function unionAnswers(dst, src){
+  let added=false;
+  ['pre','post'].forEach(m=>{
+    const sm=(src&&src[m])||{}; if(!dst[m]) dst[m]={};
+    Object.keys(sm).forEach(id=>{
+      const sa=sm[id]||{}; if(!dst[m][id]) dst[m][id]={};
+      Object.keys(sa).forEach(q=>{ if(dst[m][id][q]==null && sa[q]!=null){ dst[m][id][q]=sa[q]; added=true; } });
+    });
+  });
+  return added;
+}
+// ชุดฝั่งชนะ (updatedAt ใหม่กว่า) รับคำตอบที่ตัวเองยังไม่มีจากฝั่งแพ้ — กันคำตอบสอบหายตอนสองเครื่องซิงค์สวนกัน
+function mergeLoserSessions(win, lose){
+  if(!win || !lose || win===lose || win.deleted) return false;
+  // ฝั่งแพ้เก่ากว่าตอนครูสั่ง "ล้างผลสอบ" — ไม่ดึงข้อมูลที่ตั้งใจล้างกลับมา
+  if((Number(lose.updatedAt)||0) <= (Number(win.sessClearedAt)||0)) return false;
+  let added=false;
+  if(!win.sessionsAll) win.sessionsAll={};
+  const la=lose.sessionsAll||{};
+  Object.keys(la).forEach(k=>{
+    if(!win.sessionsAll[k]) win.sessionsAll[k]={pre:{},post:{}};
+    if(unionAnswers(win.sessionsAll[k], la[k])) added=true;
+  });
+  if(lose.sessions && (Object.keys(lose.sessions.pre||{}).length+Object.keys(lose.sessions.post||{}).length)>0){
+    if(!win.sessions) win.sessions={pre:{},post:{}};
+    if(unionAnswers(win.sessions, lose.sessions)) added=true;   // ข้อมูลรูปแบบเก่า (ยังไม่แยกกลุ่ม)
+  }
+  return added;
+}
 function applyCloud(j){
   const before=JSON.stringify(state.sets)+'|'+JSON.stringify(state.roster);
-  // รวมผลจากคลาวด์กับของในเครื่อง: ชุดไหนอยู่ทั้งคู่ → เอาตัวที่ updatedAt ใหม่กว่า · อยู่ฝั่งเดียว → เก็บไว้
+  // รวมผลจากคลาวด์กับของในเครื่อง: ชุดไหนอยู่ทั้งคู่ → เอาตัวที่ updatedAt ใหม่กว่าเป็นหลัก แล้วเติมคำตอบจากอีกฝั่งที่ยังไม่มี
   const byId={}; (j.sets||[]).forEach(s=>{ if(s&&s.id) byId[s.id]=s; });
   const merged=[];
   state.sets.forEach(loc=>{
     const rem=byId[loc.id];
-    if(rem){ merged.push((Number(rem.updatedAt)||0)>=(Number(loc.updatedAt)||0)?rem:loc); delete byId[loc.id]; }
+    if(rem){
+      // เสมอกันให้ฝั่งเครื่องชนะ — กันเคสคลาวด์ตัดคำตอบทิ้ง (JSON ใหญ่เกิน cell) แล้ววนทับของจริงในเครื่อง
+      const win=(Number(rem.updatedAt)||0)>(Number(loc.updatedAt)||0)?rem:loc, lose=(win===rem)?loc:rem;
+      if(mergeLoserSessions(win, lose)){ win.updatedAt=Date.now(); syncDirty=true; }   // ได้คำตอบเพิ่ม → ดันชุดรวมกลับขึ้นคลาวด์
+      merged.push(win); delete byId[loc.id];
+    }
     else merged.push(loc);   // มีแค่ในเครื่อง (เช่น เพิ่งสร้างตอนออฟไลน์) — ไม่ทิ้ง
   });
   Object.keys(byId).forEach(id=>merged.push(byId[id]));   // มีแค่บนคลาวด์ — รับเข้ามา
