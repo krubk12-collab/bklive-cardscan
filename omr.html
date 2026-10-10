@@ -159,7 +159,7 @@ function thaiNum(n){ return String(n).replace(/[0-9]/g,d=>'๐๑๒๓๔๕๖
 let genRoster=[];
 function gTypeChange(){ document.getElementById('gPersonRow').style.display=document.getElementById('gType').value==='person'?'flex':'none'; }
 async function loadClasses(){ const sel=document.getElementById('classSel'); sel.innerHTML='<option>โหลด...</option>'; try{ const c=await jsonp({action:'classes'}); sel.innerHTML='<option value="">— เลือกห้อง —</option>'+c.map(x=>'<option value="'+x.id+'">'+x.name+'</option>').join(''); }catch(e){ sel.innerHTML='<option>โหลดไม่ได้</option>'; } }
-async function loadStudents(){ const cid=document.getElementById('classSel').value; if(!cid){alert('เลือกห้องก่อน');return;} try{ const s=await jsonp({action:'students',class:cid}); genRoster=s.map(x=>({id:x.number,name:x.name})); document.getElementById('gStu').textContent='ได้ '+genRoster.length+' คน'; }catch(e){ alert('ดึงรายชื่อไม่ได้'); } }
+async function loadStudents(){ const cid=document.getElementById('classSel').value; if(!cid){alert('เลือกห้องก่อน');return;} try{ const s=await rosterJsonp(cid); genRoster=s.map(x=>({id:x.number,name:x.name})); document.getElementById('gStu').textContent='ได้ '+genRoster.length+' คน'; }catch(e){ alert('ดึงรายชื่อไม่ได้'); } }
 function drawHeader(sh){ // โลโก้ + ชื่อระบบ + ชื่อโรงเรียน (เว้น TL marker ที่กิน x50..130)
   const im=document.createElement('img'); im.src='assets/logo.png';
   im.style.cssText='position:absolute;left:150px;top:26px;width:100px;height:110px;object-fit:contain;'; sh.appendChild(im);
@@ -323,6 +323,18 @@ function exportCSV(){
 
 /* init */
 (async function(){ await openDB(); rows=(await dbAll()).sort((a,b)=>b.id<a.id?-1:1); teacher=localStorage.getItem('omr_teacher')||'ครู ณัฏฐจิรา ทองงาม'; document.getElementById('teacherBadge').textContent='👩‍🏫 '+teacher; if(localStorage.getItem('omr_up')==='0')document.getElementById('upChk').checked=false; buildSheets(); renderRows(); showGate(); })();
+</script>
+<script>
+/* รายชื่อนักเรียนต้องใช้ "รหัสร่วมของโรงเรียน" (10ต.ค.69) — กรอกครั้งเดียว เครื่องจำไว้ */
+function rosterKey(force){let k='';try{k=localStorage.getItem('bkRosterKey')||''}catch(e){}
+  if(!k||force){k=(prompt('กรอก "รหัสร่วมของโรงเรียน" เพื่อดึงรายชื่อนักเรียน')||'').trim();if(k)try{localStorage.setItem('bkRosterKey',k)}catch(e){}}
+  return k;}
+async function rosterJsonp(cid){
+  for(let i=0;i<2;i++){const k=rosterKey(i>0);if(!k)throw 'ยังไม่ได้กรอกรหัสร่วม';
+    const r=await jsonp({action:'students',class:cid,key:k});
+    if(r&&r.error==='key'){try{localStorage.removeItem('bkRosterKey')}catch(e){}continue;}
+    return r;}
+  throw 'รหัสร่วมไม่ถูกต้อง';}
 </script>
 </body>
 </html>

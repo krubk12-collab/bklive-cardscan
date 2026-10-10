@@ -1105,7 +1105,7 @@ async function loadStudents(btn){
   if(!cid){ alert('เลือกห้องก่อนครับ (กดโหลดห้อง แล้วเลือก)'); return; }
   btnBusy(btn,true);
   try{
-    const stu=await jsonp({action:'students',class:cid});
+    const stu=await rosterJsonp(cid);
     if(!stu||!stu.length){ alert('ไม่พบนักเรียนในห้องนี้'); btnBusy(btn,false); return; }
     pickList=stu.map(s=>({id:s.number,name:s.name}));
     renderPickPanel();
@@ -2217,7 +2217,7 @@ async function loadSysinfo(btn){
   btnBusy(btn,true);
   box.innerHTML=spin('กำลังโหลดข้อมูลระบบจาก Google Sheets...');
   try{
-    const res=await fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'sysinfo'})});
+    const res=await fetch(state.gasUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'sysinfo',key:rosterKey()})});
     const j=await res.json();
     if(!j||!j.ok) throw new Error((j&&j.error)||'โหลดไม่สำเร็จ');
     const lb=document.getElementById('sheetLinkBtn');
@@ -2265,6 +2265,18 @@ renderModeTag(); renderQShow(); buildCards(); renderLiveGrid();
 const _ss=document.getElementById('syncStat'); if(_ss) _ss.textContent='☁️ ยังไม่ซิงค์ — เลือกชื่อครูก่อน';
 window.addEventListener('online',()=>{ if(syncDirty) cloudSync(); });   // เน็ตกลับมา → ซิงค์งานที่ค้างให้เอง
 showGate();   // เลือกครูก่อนเริ่มทุกครั้ง
+</script>
+<script>
+/* รายชื่อนักเรียนต้องใช้ "รหัสร่วมของโรงเรียน" (10ต.ค.69) — กรอกครั้งเดียว เครื่องจำไว้ */
+function rosterKey(force){let k='';try{k=localStorage.getItem('bkRosterKey')||''}catch(e){}
+  if(!k||force){k=(prompt('กรอก "รหัสร่วมของโรงเรียน" เพื่อดึงรายชื่อนักเรียน')||'').trim();if(k)try{localStorage.setItem('bkRosterKey',k)}catch(e){}}
+  return k;}
+async function rosterJsonp(cid){
+  for(let i=0;i<2;i++){const k=rosterKey(i>0);if(!k)throw 'ยังไม่ได้กรอกรหัสร่วม';
+    const r=await jsonp({action:'students',class:cid,key:k});
+    if(r&&r.error==='key'){try{localStorage.removeItem('bkRosterKey')}catch(e){}continue;}
+    return r;}
+  throw 'รหัสร่วมไม่ถูกต้อง';}
 </script>
 </body>
 </html>
